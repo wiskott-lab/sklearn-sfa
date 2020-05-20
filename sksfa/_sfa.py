@@ -323,7 +323,7 @@ class SFA(TransformerMixin, BaseEstimator):
         X = check_array(X, dtype=[np.float64, np.float32],
                         ensure_2d=True, copy=self.copy)
         y = self.pca_whiten_.transform(X)
-        y = y[:, self.nontrivial_indices]
+        y = y[:, self.nontrivial_indices_]
         y = self.pca_diff_.transform(y)
         n_missing_components = max(self.n_components_ - y.shape[1], 0)
         if n_missing_components > 0:
