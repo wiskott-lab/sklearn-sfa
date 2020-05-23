@@ -279,6 +279,7 @@ class SFA(TransformerMixin, BaseEstimator):
                 batch_diff = current_batch[1:] - current_batch[:-1]
                 self.pca_diff_.partial_fit(batch_diff)
         self._compute_delta_values()
+        self._compute_parameters()
 
     def _compute_delta_values(self):
         """ Computes the delta values, but in compliance with the method
@@ -335,3 +336,13 @@ class SFA(TransformerMixin, BaseEstimator):
                 y = np.pad(y, ((0, 0), (0, n_missing_components)), "edge")
         y = y[:, -self.n_components_:][:, ::-1]
         return y
+
+    def _compute_parameters(self):
+        """ Collapse the parameters of the two linear PCA reductions into
+        one set of mean and components for easier model inspection.
+        """
+        W_whiten = self.pca_whiten_.components_
+        W_diff = self.pca_diff_.components_
+        self.mean_ = self.pca_whiten_.mean_
+        self.components_ = np.dot(np.dot(W_diff, np.diag(1/np.sqrt(self.pca_whiten_.explained_variance_))), W_whiten)[-self.n_components_:][::-1]
+
