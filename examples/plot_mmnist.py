@@ -35,6 +35,7 @@ test_data = data[split_idx:]
 test_gt = ground_truth[split_idx:]
 
 sfa = SFA(2)
+
 sfa.fit(training_data)
 output = sfa.transform(test_data)
 
@@ -43,13 +44,14 @@ gt_order = np.argsort(gt_delta)
 gt_labels = ["x", "y"]
 
 fig, ax = plt.subplots(2, 2, sharex=True)
-cutoff = 100
+cutoff = 60
 ax[0, 0].plot(output[:cutoff, 0])
 ax[1, 0].plot(output[:cutoff, 1])
 ax[0, 1].plot(test_gt[:cutoff, gt_order[0]])
 ax[1, 1].plot(test_gt[:cutoff, gt_order[1]])
 ax[0, 0].set_title("Extracted features")
 ax[0, 1].set_title("True position")
+
 plt.tight_layout()
 plt.show()
 
