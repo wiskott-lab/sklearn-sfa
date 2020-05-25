@@ -1,5 +1,13 @@
 #! /usr/bin/env python
 
+"""
+This package has been based on the fantastic scikit-learn-contrib project skeleton and its documentation,
+as provided by Vighnesh Birodkar and scikit-learn-contrib contributors.
+It can be found https://github.com/scikit-learn-contrib/project-template
+
+Thanks a lot, you made our work significantly easier!
+"""
+
 import codecs
 import os
 

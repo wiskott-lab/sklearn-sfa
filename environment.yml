@@ -1,4 +1,4 @@
-name: project-template
+name: sklearn-sfa
 dependencies:
   - numpy
   - scipy
