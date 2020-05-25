@@ -16,9 +16,9 @@ with codecs.open('README.rst', encoding='utf-8-sig') as f:
     LONG_DESCRIPTION = f.read()
 MAINTAINER = 'Merlin Schüler'
 MAINTAINER_EMAIL = 'merlin.schueler@ini.ruhr-uni-bochum.de'
-URL = 'https://github.com/scikit-learn-contrib/project-template'
+URL = 'https://github.com/wiskott-lab/sklearn-sfa'
 LICENSE = 'new BSD'
-DOWNLOAD_URL = 'https://github.com/scikit-learn-contrib/project-template'
+DOWNLOAD_URL = 'https://github.com/wiskott-lab/sklearn-sfa'
 VERSION = __version__
 INSTALL_REQUIRES = ['numpy', 'scipy', 'scikit-learn']
 CLASSIFIERS = ['Intended Audience :: Science/Research',
@@ -32,7 +32,7 @@ CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Operating System :: Unix',
                'Operating System :: MacOS',
       #         'Programming Language :: Python :: 2.7',
-               'Programming Language :: Python :: 3.5',
+      #         'Programming Language :: Python :: 3.5',
                'Programming Language :: Python :: 3.6',
                'Programming Language :: Python :: 3.7']
 EXTRAS_REQUIRE = {
