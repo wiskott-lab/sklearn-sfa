@@ -18,4 +18,30 @@ provides an explanation of the algorithm, different use-cases, as well as pointe
 fully utilize SFA's potential, e.g., by employing non-linear basis functions or more sophisticated 
 architectures.
 
+Installation 
+------------
 
+The package can be installed via *pip*:
+
+.. code-block:: bash
+
+  pip install --user sklearn-sfa
+  
+
+Basic usage
+-----------
+
+In Python 3.6+, the package can then be imported as 
+
+.. code-block:: python
+
+  import sksfa 
+  
+The package comes with an SFA transformer. Below you see an example of initializing a transformer that
+extracts 2-dimensional features:
+
+.. code-block:: python
+
+  sfa_transformer = sksfa.SFA(n_components=2)
+  
+The transformer implements sklearn's typical interface by providing ``fit``, ``fit_transform``, and ``transform`` methods.
