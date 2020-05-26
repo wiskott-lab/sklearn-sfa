@@ -8,7 +8,7 @@ sklearn-sfa - An implementation of Slow Feature Analysis compatible with scikit-
 .. _documentation: https://sklearn-sfa.readthedocs.io/en/latest/index.html
 
 .. image:: doc/images/vectorsnail.png
-  :width: 280
+  :width: 130
 
 **sklearn-sfa** or **sksfa** is an implementation of Slow Feature Analysis for scikit-learn_.
 
