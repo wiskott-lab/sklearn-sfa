@@ -22,5 +22,7 @@ Utils
    :toctree: generated/
    :template: function.rst
 
+   utils.ReceptiveSlicer
+   utils.ReceptiveRebuilder
    utils.randomWalkFromCSC
 

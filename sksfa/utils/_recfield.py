@@ -1,0 +1,301 @@
+"""
+This module contains the core implementations needed to use receptive fields.
+"""
+import warnings
+import numpy as np
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_array
+from scipy.sparse import issparse
+
+class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
+    """ Reconstruction part of field slicing
+
+    This transformer takes input of shape (n_field_samples, n_features) and, given
+    a reconstruction shape reshapes it to (n_samples, width, height, n_features) by
+    simply reshaping.
+    This is necessary to reconstruct the between-field structure in a sample to
+    re-apply the slicer.
+    
+    Parameters
+    ----------
+    reconstruction_shape : tuple
+        A tuple defining the local structure to reconstruct without the
+        sample dimension, e.g., (8, 8) will result the output to be
+        of shape (n_samples, 8, 8, n_features).
+
+    copy : bool, default=True
+        If False, data passed to fit are overwritten and running
+        fit(X).transform(X) will not yield the expected results,
+        use fit_transform(X) instead.
+
+    Examples
+    --------
+    >>> from sksfa.utils import ReceptiveRebuilder
+    >>> import numpy as np
+    >>>
+    >>> # This could come out of a slicer + transformation.
+    >>> sliced_input = np.repeat(np.arange(9)[..., None], 4, axis=1)
+    >>> print(f"Input shape: {sliced_input.shape}")
+    >>> for idx, sample in enumerate(sliced_input):
+    >>>     print(f"Sample {idx}: {sample}")
+    >>>
+    >>> rebuilder = ReceptiveRebuilder(reconstruction_shape=(3, 3))
+    >>> rebuilder.fit(sliced_input)
+    >>>
+    >>> output = rebuilder.transform(sliced_input)
+    >>> print(f"Output shape: {output.shape}")
+    >>> print("Output sample:")
+    >>> for channel_idx in range(4):
+    >>>     print(f"Channel {channel_idx}")
+    >>>     print(output[..., channel_idx].squeeze())
+    >>>     print()
+    """
+    def __init__(self, reconstruction_shape, copy=True):
+        self.reconstruction_shape = reconstruction_shape
+        self.input_shape = None
+        self.copy = copy
+
+    def fit(self, X, y=None):
+        """Fits the transformer to input X. This mainly checks
+        the input and stores the input-shape for dimension
+        consistency.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (n_field_samples, n_features)
+            The training input samples.
+
+        y : None or {array-like}, shape (n_samples, 1)
+            This does nothing and is only in here for compliance with
+            sklearn API.
+
+        Returns
+        -------
+        self : object
+            Returns self.
+        """
+        X = check_array(X, dtype=[np.float64, np.float32], copy=self.copy)
+        self.input_shape = X.shape[1:]
+
+    def transform(self, X):
+        """ Applies the reshape transformation to an input stream,
+        this should restore the between-field structure of previously sliced
+        data, while in-field structure is ignored by keeping it flat.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (n_field_samples, n_features)
+            The field samples to puzzle back together according to
+            self.reconstruction_shape.
+
+        Returns
+        -------
+        X : {array-like}, shape (n_samples,) + reconstruction_shape + (n_features,)
+            The samples with restored between-field structure.
+        """
+        X = check_array(X, dtype=[np.float64, np.float32], copy=self.copy)
+        assert(X.shape[1:] == self.input_shape)
+        return X.reshape((-1,) + self.reconstruction_shape + (X.shape[-1],))
+
+class ReceptiveSlicer(TransformerMixin, BaseEstimator):
+    """ Slicing part of field slicing.
+
+    This transformer takes input of shape (n_samples, width, height, channels) and slices
+    inputs in a receptive field manner.
+
+    Parameters
+    ----------
+    field_size : tuple
+        Shape of the receptive field as a tuple of integers.
+
+    strides : tuple
+        Strides in each axis as tuple of integers.
+
+    padding : str
+        Either "valid" or "same". Only "valid" is implemented as of now.
+
+    copy : bool, default=True
+        If False, data passed to fit are overwritten and running
+        fit(X).transform(X) will not yield the expected results,
+        use fit_transform(X) instead.
+
+    Examples
+    --------
+    >>> from sksfa.utils import ReceptiveSlicer
+    >>> import numpy as np
+    >>>
+    >>> ones = np.ones((2, 2))
+    >>> # This could be an image or rebuilt output from a lower layer
+    >>> data = np.block([[0 * ones, 1 * ones], [2 * ones, 3 * ones]])[None, ..., None]
+    >>>
+    >>> print("Input sample:")
+    >>> print(data.squeeze())
+    >>> print(f"Input shape: {data.shape}")
+    >>> print()
+    >>>
+    >>> slicer = ReceptiveSlicer(field_size=ones.shape, strides=(1, 1))
+    >>> slicer.fit(data)
+    >>>
+    >>> sliced_output = slicer.transform(data)
+    >>> print(f"Output shape: {sliced_output.shape}")
+    >>> for idx, field_sample in enumerate(sliced_output):
+    >>>     print(f"Output sample {idx}: {field_sample.squeeze()}")
+    """
+    def __init__(self, field_size=(3, 3), strides=(1, 1), padding="valid", copy=True):
+        self.field_size = field_size
+        self.strides = strides
+        self.padding = padding
+        self.copy = copy
+        self.is_fitted = False
+        self.input_shape = None
+        self.reconstruction_shape = None
+
+    def fit(self, X, y=None):
+        """Fit the model to X. This mainly means checking the input array
+        and storing its shape for reconstruction.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (n_samples, width, height, n_samples)
+            The training input samples.
+
+        y : None or {array-like}, shape (n_samples, 1)
+            This does nothing and is only in here for compliance with
+            sklearn API.
+
+        Returns
+        -------
+        self : object
+            Returns self.
+        """
+        X = check_array(X, dtype=[np.float64, np.float32], allow_nd=True,
+                        copy=self.copy)
+       # self.input_dim_ = X.shape[:1]
+        if issparse(X):
+            raise TypeError('Slicer does not support sparse input.')
+        if self.padding == "valid":
+            self._fitValid(X)
+        self.is_fitted_ = True
+        return self
+
+    def _fitValid(self, X):
+        self.input_shape = X.shape[1:]
+        n_samples, width, height, channels = X.shape
+        field_width, field_height = self.field_size
+        width_stride, height_stride = self.strides
+        n_steps_width = self._checkValidSteps(width, field_width, width_stride)
+        n_steps_height = self._checkValidSteps(height, field_height, height_stride)
+        n_output_features = np.product(self.field_size) * channels
+        assert(n_steps_width > 0)
+        assert(n_steps_height > 0)
+        self.reconstruction_shape = (n_steps_width, n_steps_height)
+
+    def _checkValidSteps(self, dimension, field_size, field_stride):
+        """ Asserts if splitting up works along a single dimension for a given
+        field_size and stride. Returns the number of steps if possible otherwise
+        throws an error.
+
+        Parameters
+        ----------
+        dimension : int
+            Size of the dimension to be sliced.
+
+        field_size : int
+            Size of the field in this dimension.
+
+        field_stride : int
+            Size of the stride in this dimension.
+
+        Returns
+        -------
+        n_valid_steps : int
+            Number of slices, given the provided parameters.
+        """
+        n_valid_steps = (dimension - field_size)/field_stride + 1
+        assert(int(n_valid_steps) == n_valid_steps)
+        return int(n_valid_steps)
+
+    def _sliceSingleSample(self, sample, field_rows, field_cols, row_stride, col_stride):
+        """ Internal generator that yields slices of a single sample according
+        to provided field_size and strides.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (width, height, channels)
+            The samples to be transformed, possibly after padding.
+
+        Yields
+        -------
+        single_field : ndarray, shape (n_field_samples, field_width * field_height * channels)
+            A single field sliced from the input sample. Produces all samples, columns first.
+        """
+        row_start = 0
+        col_start = 0
+        while (row_start + field_rows <= sample.shape[0]):
+            while (col_start + field_cols <= sample.shape[1]):
+                single_field = sample[row_start:row_start + field_rows, col_start:col_start + field_cols, :].flatten()
+                yield single_field
+                col_start = col_start + col_stride
+            col_start = 0
+            row_start = row_start + row_stride
+
+    def _transformValid(self, X):
+        """ Internal function to perform the slicing with "valid" padding, aka no
+        padding at all.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (n_samples, width, height, channels)
+            The samples to be transformed.
+
+        Returns
+        -------
+        output : ndarray, shape (n_field_samples, field_width * field_height * channels)
+            The sliced fields of all samples. The field entries are flattened into
+            the last dimension.
+        """
+        n_samples, width, height, channels = X.shape
+        n_steps_width, n_steps_height = self.reconstruction_shape
+        n_output_features = np.product(self.field_size) * channels
+        self.parts_per_sample = n_steps_width * n_steps_height
+        n_output_samples = n_samples * self.parts_per_sample
+        output = np.empty((n_output_samples, n_output_features))
+        for sample_idx, sample in enumerate(X):
+            for part_idx, part in enumerate(self._sliceSingleSample(sample, *self.field_size, *self.strides)):
+                output[sample_idx * self.parts_per_sample + part_idx] = part
+        return output
+
+    def transform(self, X):
+        """ For a given dataset of images, slice the images into smaller samples in a receptive
+        field fashion.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (n_samples, width, height, channels)
+            The samples to be transformed.
+
+        Returns
+        -------
+        output : ndarray, shape (n_field_samples, field_width * field_height * channels)
+            The sliced fields of all samples. The field entries are flattened into
+            the last dimension.
+        """
+        X = check_array(X, dtype=[np.float64, np.float32], copy=self.copy, ensure_2d=False, allow_nd=True)
+        assert(X.shape[1:] == self.input_shape)
+        output = None
+        if self.padding == "valid":
+            output = self._transformValid(X)
+        return output
+
+if __name__ == "__main__":
+    samples = np.ones((5, 9, 9, 1))
+    for i in range(5):
+        samples[i] *= i
+    sl = ReceptiveSlicer(field_size=(3, 3), strides=(3, 3))
+    sl.fit(samples)
+    hidden = sl.transform(samples)
+    sr = ReceptiveRebuilder(reconstruction_shape = sl.reconstruction_shape)
+    sr.fit(hidden)
+    output = sr.transform(hidden)
+
+
