@@ -36,19 +36,42 @@ class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
     >>> # This could come out of a slicer + transformation.
     >>> sliced_input = np.repeat(np.arange(9)[..., None], 4, axis=1)
     >>> print(f"Input shape: {sliced_input.shape}")
-    >>> for idx, sample in enumerate(sliced_input):
-    >>>     print(f"Sample {idx}: {sample}")
-    >>>
+    Input shape: (9, 4)
+    >>> for idx, sample in enumerate(sliced_input): print(f"Sample {idx}: {sample}")
+    Sample 0: [0 0 0 0]
+    Sample 1: [1 1 1 1]
+    Sample 2: [2 2 2 2]
+    Sample 3: [3 3 3 3]
+    Sample 4: [4 4 4 4]
+    Sample 5: [5 5 5 5]
+    Sample 6: [6 6 6 6]
+    Sample 7: [7 7 7 7]
+    Sample 8: [8 8 8 8]
     >>> rebuilder = ReceptiveRebuilder(reconstruction_shape=(3, 3))
-    >>> rebuilder.fit(sliced_input)
+    >>> rebuilder = rebuilder.fit(sliced_input)
     >>>
     >>> output = rebuilder.transform(sliced_input)
     >>> print(f"Output shape: {output.shape}")
+    Output shape: (1, 3, 3, 4)
     >>> print("Output sample:")
-    >>> for channel_idx in range(4):
-    >>>     print(f"Channel {channel_idx}")
-    >>>     print(output[..., channel_idx].squeeze())
-    >>>     print()
+    Output sample:
+    >>> for channel_idx in range(4): print(f"Channel {channel_idx}:\\n{output[..., channel_idx].squeeze()}")
+    Channel 0:
+    [[0. 1. 2.]
+     [3. 4. 5.]
+     [6. 7. 8.]]
+    Channel 1:
+    [[0. 1. 2.]
+     [3. 4. 5.]
+     [6. 7. 8.]]
+    Channel 2:
+    [[0. 1. 2.]
+     [3. 4. 5.]
+     [6. 7. 8.]]
+    Channel 3:
+    [[0. 1. 2.]
+     [3. 4. 5.]
+     [6. 7. 8.]]
     """
     def __init__(self, reconstruction_shape, copy=True):
         self.reconstruction_shape = reconstruction_shape
@@ -76,6 +99,7 @@ class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
         """
         X = check_array(X, dtype=[np.float64, np.float32], copy=self.copy)
         self.input_shape = X.shape[1:]
+        return self
 
     def transform(self, X):
         """ Applies the reshape transformation to an input stream,
@@ -128,18 +152,28 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
     >>> # This could be an image or rebuilt output from a lower layer
     >>> data = np.block([[0 * ones, 1 * ones], [2 * ones, 3 * ones]])[None, ..., None]
     >>>
-    >>> print("Input sample:")
     >>> print(data.squeeze())
+    [[0. 0. 1. 1.]
+     [0. 0. 1. 1.]
+     [2. 2. 3. 3.]
+     [2. 2. 3. 3.]]
     >>> print(f"Input shape: {data.shape}")
-    >>> print()
-    >>>
+    Input shape: (1, 4, 4, 1)
     >>> slicer = ReceptiveSlicer(field_size=ones.shape, strides=(1, 1))
-    >>> slicer.fit(data)
-    >>>
+    >>> slicer = slicer.fit(data)
     >>> sliced_output = slicer.transform(data)
     >>> print(f"Output shape: {sliced_output.shape}")
-    >>> for idx, field_sample in enumerate(sliced_output):
-    >>>     print(f"Output sample {idx}: {field_sample.squeeze()}")
+    Output shape: (9, 4)
+    >>> for idx, field_sample in enumerate(sliced_output): print(f"Output sample {idx}: {field_sample.squeeze()}")
+    Output sample 0: [0. 0. 0. 0.]
+    Output sample 1: [0. 1. 0. 1.]
+    Output sample 2: [1. 1. 1. 1.]
+    Output sample 3: [0. 0. 2. 2.]
+    Output sample 4: [0. 1. 2. 3.]
+    Output sample 5: [1. 1. 3. 3.]
+    Output sample 6: [2. 2. 2. 2.]
+    Output sample 7: [2. 3. 2. 3.]
+    Output sample 8: [3. 3. 3. 3.]
     """
     def __init__(self, field_size=(3, 3), strides=(1, 1), padding="valid", copy=True):
         self.field_size = field_size
