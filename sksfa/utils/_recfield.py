@@ -119,7 +119,14 @@ class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
         """
         X = check_array(X, dtype=[np.float64, np.float32], copy=self.copy)
         assert(X.shape[1:] == self.input_shape)
-        return X.reshape((-1,) + self.reconstruction_shape + (X.shape[-1],))
+        n_features = X.shape[-1]
+        original_n_samples = int(np.product(X.shape)/(n_features * np.product(self.reconstruction_shape)))
+        n_fields = int(X.shape[0] / original_n_samples)
+        output = np.empty((original_n_samples,) + self.reconstruction_shape + (n_features,))
+        for sample_idx in range(original_n_samples):
+            puzzle_pieces = X[sample_idx::original_n_samples]
+            output[sample_idx] = puzzle_pieces.reshape(self.reconstruction_shape + (n_features,))
+        return output
 
 class ReceptiveSlicer(TransformerMixin, BaseEstimator):
     """ Slicing part of field slicing.
@@ -296,7 +303,8 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
         output = np.empty((n_output_samples, n_output_features))
         for sample_idx, sample in enumerate(X):
             for part_idx, part in enumerate(self._sliceSingleSample(sample, *self.field_size, *self.strides)):
-                output[sample_idx * self.parts_per_sample + part_idx] = part
+                #output[sample_idx * self.parts_per_sample + part_idx] = part
+                output[part_idx * n_samples + sample_idx] = part
         return output
 
     def transform(self, X):
