@@ -3,6 +3,7 @@ This module contains the core implementation of linear SFA.
 """
 import warnings
 import numpy as np
+import scipy as sp
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.utils.validation import check_array
@@ -147,6 +148,17 @@ class SFA(TransformerMixin, BaseEstimator):
         self.batch_size = batch_size
         self.robustness_cutoff = robustness_cutoff
         self.fill_mode = fill_mode
+        self.is_fitted_ = False
+        self.mean = None
+        self.diff_mean = None
+        # Following are attributes only needed for partial fitting
+        self.partially_fitted = False
+        self.n_partial_samples = 0
+        self.n_partial_diff_samples = 0
+        self.partial_covariance = None
+        self.partial_diff_covariance = None
+        self.partial_eigenvectors = None
+        self.partial_eigenvalues = None
 
     def _initialise_pca(self):
         """ Initialises internally used PCA transformers.
@@ -201,10 +213,41 @@ class SFA(TransformerMixin, BaseEstimator):
         self.is_fitted_ = True
         return self
 
+    def _covariance_update(self, sample, mean, C, n_samples, offset=0):
+        """ Helper function to accumulate covariance and mean information
+        incrementally. To be used for mini-batch training via partial_fit.
+        """
+        if n_samples == 0:
+            mean = sample
+            C = np.outer(sample - mean, sample - mean)
+        else:
+            new_mean = mean + (sample - mean) / (n_samples + 1)
+            C = (C * (n_samples - offset) + np.outer(sample - new_mean, sample - mean))/(n_samples + 1 - offset)
+            mean = new_mean
+        n_samples += 1
+        return mean, C, n_samples
+
+    def partial_fit(self, X):
+        """ This function is meant for mini-batch training and collects covariance
+        and mean information of the provided mini-batches.
+        Training is finished as soon as transform is called or if the model has been
+        fitted by full-batch training.
+        """
+        assert(not self.is_fitted_)
+        diff_X = X[1:] - X[:-1]
+        for sample in X:
+            self.mean, self.partial_covariance, self.n_partial_samples = self._covariance_update(sample, self.mean, self.partial_covariance, self.n_partial_samples, offset=1)
+        for sample in diff_X:
+            self.diff_mean, self.partial_diff_covariance, self.n_partial_diff_samples = self._covariance_update(sample, self.diff_mean, self.partial_diff_covariance, self.n_partial_diff_samples)
+        self.partially_fitted = True
+        return self
+
     def _fit(self, X):
         """Fit the model to X either by using minor component extraction
         on the difference time-series of the whitened data or other
         (not yet implemented) method.
+        This is not meant for mini-batch training. 
+        For mini-batch training, use partial_fit instead.
 
         Parameters
         ----------
@@ -216,8 +259,9 @@ class SFA(TransformerMixin, BaseEstimator):
         self._fit_standard_method(X)
 
     def _fit_standard_method(self, X):
-        """ Fit the model to X either by first whitening the data, calculating
+        """ Fit the model to X by first whitening the data, calculating
         the one-step differences and then extract their minor components.
+        This method is not used for mini-batch training.
 
         Parameters
         ----------
@@ -228,6 +272,7 @@ class SFA(TransformerMixin, BaseEstimator):
         """
         n_samples, _ = X.shape
         self.pca_whiten_.fit(X)
+        self.mean = self.pca_whiten_.mean_
 
         X_whitened = self.pca_whiten_.transform(X)
 
@@ -267,6 +312,8 @@ class SFA(TransformerMixin, BaseEstimator):
         X_whitened = X_whitened[:, self.nontrivial_indices_]
 
         X_diff = X_whitened[1:] - X_whitened[:-1]
+        self.diff_mean = X_diff.mean(axis=0)
+        X_diff -= self.diff_mean
         if self.batch_size is None:
             self.pca_diff_.fit(X_diff)
         else:
@@ -277,9 +324,16 @@ class SFA(TransformerMixin, BaseEstimator):
                 batch_end = (batch_idx + 1) * self.batch_size
                 current_batch = X_whitened[batch_start:batch_end]
                 batch_diff = current_batch[1:] - current_batch[:-1]
-                self.pca_diff_.partial_fit(batch_diff)
+                self.pca_diff_.partial_fit(batch_diff - self.diff_mean)
         self._compute_delta_values()
         #self._compute_parameters()
+
+    def _fit_generalized_eigenmethod(self):
+        """ For mini-batch training, the standard method is not used.
+        Instead, a generalized eigenvalue problem from accumulated covariance
+        matrices is solved.
+        """
+        self.partial_eigenvalues, self.partial_eigenvectors = sp.linalg.eigh(self.partial_diff_covariance, self.partial_covariance)
 
     def _compute_delta_values(self):
         """ Computes the delta values, but in compliance with the method
@@ -323,18 +377,25 @@ class SFA(TransformerMixin, BaseEstimator):
         """
         X = check_array(X, dtype=[np.float64, np.float32],
                         ensure_2d=True, copy=self.copy)
-        y = self.pca_whiten_.transform(X)
-        y = y[:, self.nontrivial_indices_]
-        y = self.pca_diff_.transform(y)
-        n_missing_components = max(self.n_components_ - y.shape[1], 0)
-        if n_missing_components > 0:
-            if self.fill_mode == "zero":
-                y = np.pad(y, ((0, 0), (n_missing_components, 0)))
-            if self.fill_mode == "fastest":
-                y = np.pad(y, ((0, 0), (n_missing_components, 0)), "edge")
-            if self.fill_mode == "slowest":
-                y = np.pad(y, ((0, 0), (0, n_missing_components)), "edge")
-        y = y[:, -self.n_components_:][:, ::-1]
+        if (self.is_fitted_):
+            y = self.pca_whiten_.transform(X)
+            y = y[:, self.nontrivial_indices_]
+            y = self.pca_diff_.transform(y)
+            n_missing_components = max(self.n_components_ - y.shape[1], 0)
+            if n_missing_components > 0:
+                if self.fill_mode == "zero":
+                    y = np.pad(y, ((0, 0), (n_missing_components, 0)))
+                if self.fill_mode == "fastest":
+                    y = np.pad(y, ((0, 0), (n_missing_components, 0)), "edge")
+                if self.fill_mode == "slowest":
+                    y = np.pad(y, ((0, 0), (0, n_missing_components)), "edge")
+            y = y[:, -self.n_components_:][:, ::-1]
+        elif (self.partially_fitted):
+            if not (self.is_fitted_):
+                # fit using accumulated covariance matrices
+                self._fit_generalized_eigenmethod()
+                self.is_fitted_ = True
+            y = np.dot(X - self.mean, self.partial_eigenvectors)[:, :self.n_components]
         return y
 
     def _compute_parameters(self):
