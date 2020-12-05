@@ -9,7 +9,7 @@ class Flatten:
     def fit(self, X, y=None):
         pass
 
-    def partial_fit(self, X, y=None):
+    def partial(self, X, y=None):
         pass
 
     def transform(self, X):
@@ -22,7 +22,7 @@ class AdditiveNoise:
     def fit(self, X, y=None):
         pass
 
-    def partial_fit(self, X, y=None):
+    def partial(self, X, y=None):
         pass
 
     def transform(self, X):
@@ -36,7 +36,7 @@ class Clipper:
     def fit(self, X, y=None):
         pass
 
-    def partial_fit(self, X, y=None):
+    def partial(self, X, y=None):
         pass
 
     def transform(self, X):
@@ -88,7 +88,7 @@ class HSFA:
             pre_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
             self.sequence.append(pre_expansion_sfa)
             expansion = PolynomialFeatures(2)
-            expansion.partial_fit = expansion.fit
+            expansion.partial = expansion.fit
             self.sequence.append(expansion)
             self.sequence.append(AdditiveNoise(self.noise_std))
             post_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
@@ -100,7 +100,7 @@ class HSFA:
         pre_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
         self.sequence.append(pre_expansion_sfa)
         expansion = PolynomialFeatures(2)
-        expansion.partial_fit = expansion.fit
+        expansion.partial = expansion.fit
         self.sequence.append(expansion)
         self.sequence.append(AdditiveNoise(self.noise_std))
         post_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
@@ -125,10 +125,10 @@ class HSFA:
                 for member in transform_only:
                     current_batch = member.transform(current_batch)
                 for member in partial_sequence:
-                    member.partial_fit(current_batch)
+                    member.partial(current_batch)
                     current_batch = member.transform(current_batch)
                 if idx < len(self.sequence):
-                    self.sequence[idx].partial_fit(current_batch)
+                    self.sequence[idx].partial(current_batch)
             last_idx = idx
         return self
 

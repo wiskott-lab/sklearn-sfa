@@ -103,7 +103,7 @@ class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
         self.is_fitted_ = True
         return self
 
-    def partial_fit(self, X, y=None):
+    def partial(self, X, y=None):
         if not self.is_fitted_:
             return self.fit(X)
         else:
@@ -174,7 +174,7 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
      [2. 2. 3. 3.]]
     >>> print(f"Input shape: {data.shape}")
     Input shape: (1, 4, 4, 1)
-    >>> slicer = ReceptiveSlicer(field_size=ones.shape, strides=(1, 1))
+    >>> slicer = ReceptiveSlicer(input_shape=data.shape, field_size=ones.shape, strides=(1, 1))
     >>> slicer = slicer.fit(data)
     >>> sliced_output = slicer.transform(data)
     >>> print(f"Output shape: {sliced_output.shape}")
@@ -230,7 +230,7 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
         self.is_fitted_ = True
         return self
 
-    def partial_fit(self, X, y=None):
+    def partial(self, X, y=None):
         if not self.is_fitted_:
             return self.fit(X)
         else:

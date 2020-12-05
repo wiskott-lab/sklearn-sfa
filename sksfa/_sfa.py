@@ -10,6 +10,7 @@ from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.utils.validation import check_array
 from scipy.sparse import issparse
 from sklearn.utils.multiclass import unique_labels
+from sklearn.exceptions import NotFittedError
 from sklearn.metrics import euclidean_distances
 
 
@@ -149,17 +150,6 @@ class SFA(TransformerMixin, BaseEstimator):
         self.batch_size = batch_size
         self.robustness_cutoff = robustness_cutoff
         self.fill_mode = fill_mode
-        self.is_fitted_ = False
-        # Following are attributes only needed for partial fitting
-        self.partially_fitted = False
-        self.sum = None
-        self.diff_sum = None
-        self.n_partial_samples = 0
-        self.n_partial_diff_samples = 0
-        self.partial_outersum = None
-        self.partial_diff_outersum = None
-        self.partial_eigenvectors = None
-        self.partial_eigenvalues = None
 
     def _initialise_pca(self):
         """ Initialises internally used PCA transformers.
@@ -214,9 +204,17 @@ class SFA(TransformerMixin, BaseEstimator):
         self.is_fitted_ = True
         return self
 
-    def partial_fit(self, X):
+    def partial(self, X, y=None):
         n_samples = X.shape[0]
-        assert(not self.is_fitted_)
+        assert(not self.is_fitted)
+        if not self.is_partially_fitted:
+            self._diff_sum = None
+            self._n_partial_samples = 0
+            self._n_partial_diff_samples = 0
+            #self.partial_outersum = None
+            #self.partial_diff_outersum = None
+            self._partial_eigenvectors = None
+            self._partial_eigenvalues = None
         if self.batch_size is None:
             self._accumulate(X)
             self.last_partial_sample = X[-1]
@@ -226,22 +224,7 @@ class SFA(TransformerMixin, BaseEstimator):
                 current_batch = X[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
                 self._accumulate(current_batch)
                 self.last_partial_sample = current_batch[-1]
-        self.partially_fitted = True
-        return self
-
-    def receptive_fit(self, X):
-        n_samples = X.shape[0]
-        assert(not self.is_fitted_)
-        if self.batch_size is None:
-            self._accumulate(X)
-            self.last_partial_sample = X[-1]
-        else:
-            n_batches = math.ceil(n_samples/self.batch_size)
-            for batch_idx in range(n_batches):
-                current_batch = X[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
-                self._accumulate(current_batch)
-                self.last_partial_sample = current_batch[-1]
-        self.partially_fitted = True
+        self.is_partially_fitted_ = True
         return self
 
     def _accumulate(self, X):
@@ -251,24 +234,24 @@ class SFA(TransformerMixin, BaseEstimator):
         fitted by full-batch training.
         """
         diff_X = X[1:] - X[:-1]
-        if self.n_partial_samples == 0:
+        if self._n_partial_samples == 0:
             self.sample_sum = X.sum(axis=0)
             self.outer_sum = np.dot(X.T, X)
-            self.n_partial_samples = X.shape[0]
+            self._n_partial_samples = X.shape[0]
         else:
             self.sample_sum += X.sum(axis=0)
             self.outer_sum += np.dot(X.T, X)
-            self.n_partial_samples += X.shape[0]
+            self._n_partial_samples += X.shape[0]
 
-        if self.n_partial_diff_samples == 0:
+        if self._n_partial_diff_samples == 0:
             self.sample_diff_sum = diff_X.sum(axis=0)
             self.outer_diff_sum = np.dot(diff_X.T, diff_X)
-            self.n_partial_diff_samples = diff_X.shape[0]
+            self._n_partial_diff_samples = diff_X.shape[0]
         else:
             last_partial_diff = X[0] - self.last_partial_sample
             self.sample_diff_sum += diff_X.sum(axis=0)# + last_partial_diff
             self.outer_diff_sum += np.dot(diff_X.T, diff_X)# + np.dot(last_partial_diff[:, None], last_partial_diff[None, :])
-            self.n_partial_diff_samples += diff_X.shape[0]# + 1
+            self._n_partial_diff_samples += diff_X.shape[0]# + 1
         return self
 
     def _fit(self, X):
@@ -301,7 +284,7 @@ class SFA(TransformerMixin, BaseEstimator):
         """
         n_samples, _ = X.shape
         self.pca_whiten_.fit(X)
-        self.mean = self.pca_whiten_.mean_
+        #self.mean = self.pca_whiten_.mean_
 
         X_whitened = self.pca_whiten_.transform(X)
 
@@ -341,8 +324,8 @@ class SFA(TransformerMixin, BaseEstimator):
         X_whitened = X_whitened[:, self.nontrivial_indices_]
 
         X_diff = X_whitened[1:] - X_whitened[:-1]
-        self.diff_mean = X_diff.mean(axis=0)
-        X_diff -= self.diff_mean
+        self._diff_mean = X_diff.mean(axis=0)
+        X_diff -= self._diff_mean
         if self.batch_size is None:
             self.pca_diff_.fit(X_diff)
         else:
@@ -353,7 +336,7 @@ class SFA(TransformerMixin, BaseEstimator):
                 batch_end = (batch_idx + 1) * self.batch_size
                 current_batch = X_whitened[batch_start:batch_end]
                 batch_diff = current_batch[1:] - current_batch[:-1]
-                self.pca_diff_.partial_fit(batch_diff - self.diff_mean)
+                self.pca_diff_.partial_fit(batch_diff - self._diff_mean)
         self._compute_delta_values()
         #self._compute_parameters()
 
@@ -362,9 +345,9 @@ class SFA(TransformerMixin, BaseEstimator):
         Instead, a generalized eigenvalue problem from accumulated covariance
         matrices is solved.
         """
-        C = (self.outer_sum  - np.outer(self.sample_sum, self.sample_sum)/(self.n_partial_samples)) / (self.n_partial_samples - 1)
-        Cdot = self.outer_diff_sum/(self.n_partial_diff_samples - 1)
-        self.partial_eigenvalues, self.partial_eigenvectors = sp.linalg.eigh(Cdot, C)
+        C = (self.outer_sum  - np.outer(self.sample_sum, self.sample_sum)/(self._n_partial_samples)) / (self._n_partial_samples - 1)
+        Cdot = self.outer_diff_sum/(self._n_partial_diff_samples - 1)
+        self._partial_eigenvalues, self._partial_eigenvectors = sp.linalg.eigh(Cdot, C)
 
     def _compute_delta_values(self):
         """ Computes the delta values, but in compliance with the method
@@ -408,7 +391,7 @@ class SFA(TransformerMixin, BaseEstimator):
         """
         X = check_array(X, dtype=[np.float64, np.float32],
                         ensure_2d=True, copy=self.copy)
-        if (self.is_fitted_) and (not self.partially_fitted):
+        if (self.is_fitted) and (not self.is_partially_fitted):
             y = self.pca_whiten_.transform(X)
             y = y[:, self.nontrivial_indices_]
             y = self.pca_diff_.transform(y)
@@ -421,13 +404,29 @@ class SFA(TransformerMixin, BaseEstimator):
                 if self.fill_mode == "slowest":
                     y = np.pad(y, ((0, 0), (0, n_missing_components)), "edge")
             y = y[:, -self.n_components_:][:, ::-1]
-        elif (self.partially_fitted):
-            if not (self.is_fitted_):
+        elif (self.is_partially_fitted):
+            if not (self.is_fitted):
                 # fit using accumulated covariance matrices
                 self._fit_generalized_eigenmethod()
                 self.is_fitted_ = True
-            y = np.dot(X, self.partial_eigenvectors[:, :self.n_components]) - np.dot(self.sample_sum/(self.n_partial_samples), self.partial_eigenvectors[:, :self.n_components])
+            y = np.dot(X, self._partial_eigenvectors[:, :self.n_components]) - np.dot(self.sample_sum/(self._n_partial_samples), self._partial_eigenvectors[:, :self.n_components])
+        else:
+            raise NotFittedError("SFA has not yet been fitted via 'fit' or 'partial_fit'")
         return y
+
+    @property
+    def is_fitted(self):
+        try:
+            return self.is_fitted_
+        except AttributeError:
+            return False
+
+    @property
+    def is_partially_fitted(self):
+        try:
+            return self.is_partially_fitted_
+        except AttributeError:
+            return False
 
     def _compute_parameters(self):
         """ Collapse the parameters of the two linear PCA reductions into
@@ -437,6 +436,6 @@ class SFA(TransformerMixin, BaseEstimator):
         """
         W_whiten = self.pca_whiten_.components_
         W_diff = self.pca_diff_.components_
-        self.mean_ = self.pca_whiten_.mean_
+        #self.mean_ = self.pca_whiten_.mean_
         self.components_ = np.dot(np.dot(W_diff, np.diag(1/np.sqrt(self.pca_whiten_.explained_variance_))), W_whiten)[-self.n_components_:][::-1]
 
