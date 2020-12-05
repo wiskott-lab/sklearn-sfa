@@ -45,7 +45,9 @@ class Clipper:
 
 class HSFA:
     def __init__(self, n_components, input_shape, layer_configurations, internal_batch_size=50, noise_std=0.05, verbose=False):
-        """ Layer configurations need to contain: (field_w, field_h, stride_w, stride_h, n_components) """
+        """ 
+        This class builds an HSFA network according to the specifications given by layer_configurations".
+        Layer configurations need to contain: (field_w, field_h, stride_w, stride_h, n_components) """
         self.layer_configurations = layer_configurations
         self.verbose = verbose
         self.input_shape = input_shape
