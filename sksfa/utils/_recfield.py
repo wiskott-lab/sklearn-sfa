@@ -77,6 +77,7 @@ class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
         self.reconstruction_shape = reconstruction_shape
         self.input_shape = None
         self.copy = copy
+        self.is_fitted_ = False
 
     def fit(self, X, y=None):
         """Fits the transformer to input X. This mainly checks
@@ -99,7 +100,14 @@ class ReceptiveRebuilder(TransformerMixin, BaseEstimator):
         """
         X = check_array(X, dtype=[np.float64, np.float32], copy=self.copy)
         self.input_shape = X.shape[1:]
+        self.is_fitted_ = True
         return self
+
+    def partial_fit(self, X, y=None):
+        if not self.is_fitted_:
+            return self.fit(X)
+        else:
+            return self
 
     def transform(self, X):
         """ Applies the reshape transformation to an input stream,
@@ -182,14 +190,17 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
     Output sample 7: [2. 3. 2. 3.]
     Output sample 8: [3. 3. 3. 3.]
     """
-    def __init__(self, field_size=(3, 3), strides=(1, 1), padding="valid", copy=True):
+    def __init__(self, input_shape, field_size=(3, 3), strides=(1, 1), padding="valid", copy=True):
         self.field_size = field_size
+        self.input_shape = input_shape
         self.strides = strides
         self.padding = padding
         self.copy = copy
-        self.is_fitted = False
+        self.is_fitted_ = False
         self.input_shape = None
-        self.reconstruction_shape = None
+        width_steps = self._checkValidSteps(input_shape[0], field_size[0], strides[0])
+        height_steps = self._checkValidSteps(input_shape[1], field_size[1], strides[1])
+        self.reconstruction_shape = (width_steps, height_steps)
 
     def fit(self, X, y=None):
         """Fit the model to X. This mainly means checking the input array
@@ -218,6 +229,12 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
             self._fitValid(X)
         self.is_fitted_ = True
         return self
+
+    def partial_fit(self, X, y=None):
+        if not self.is_fitted_:
+            return self.fit(X)
+        else:
+            return self
 
     def _fitValid(self, X):
         self.input_shape = X.shape[1:]
@@ -303,7 +320,6 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
         output = np.empty((n_output_samples, n_output_features))
         for sample_idx, sample in enumerate(X):
             for part_idx, part in enumerate(self._sliceSingleSample(sample, *self.field_size, *self.strides)):
-                #output[sample_idx * self.parts_per_sample + part_idx] = part
                 output[part_idx * n_samples + sample_idx] = part
         return output
 
@@ -330,14 +346,16 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
         return output
 
 if __name__ == "__main__":
-    samples = np.ones((5, 9, 9, 1))
-    for i in range(5):
+    samples = np.ones((20, 9, 9, 1))
+    for i in range(samples.shape[0]):
         samples[i] *= i
-    sl = ReceptiveSlicer(field_size=(3, 3), strides=(3, 3))
+    sl = ReceptiveSlicer(input_shape=samples.shape[1:], field_size=(4, 4), strides=(1, 1))
     sl.fit(samples)
     hidden = sl.transform(samples)
     sr = ReceptiveRebuilder(reconstruction_shape = sl.reconstruction_shape)
     sr.fit(hidden)
     output = sr.transform(hidden)
+
+
 
 

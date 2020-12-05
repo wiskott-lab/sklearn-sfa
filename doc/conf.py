@@ -75,7 +75,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'sklearn-sfa'
-copyright = u'2020, Merlin Schler'
+copyright = u'2020, Merlin Schüler'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

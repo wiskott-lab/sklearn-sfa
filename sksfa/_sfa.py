@@ -3,6 +3,7 @@ This module contains the core implementation of linear SFA.
 """
 import warnings
 import numpy as np
+import math
 import scipy as sp
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.decomposition import PCA, IncrementalPCA
@@ -149,14 +150,14 @@ class SFA(TransformerMixin, BaseEstimator):
         self.robustness_cutoff = robustness_cutoff
         self.fill_mode = fill_mode
         self.is_fitted_ = False
-        self.mean = None
-        self.diff_mean = None
         # Following are attributes only needed for partial fitting
         self.partially_fitted = False
+        self.sum = None
+        self.diff_sum = None
         self.n_partial_samples = 0
         self.n_partial_diff_samples = 0
-        self.partial_covariance = None
-        self.partial_diff_covariance = None
+        self.partial_outersum = None
+        self.partial_diff_outersum = None
         self.partial_eigenvectors = None
         self.partial_eigenvalues = None
 
@@ -213,33 +214,61 @@ class SFA(TransformerMixin, BaseEstimator):
         self.is_fitted_ = True
         return self
 
-    def _covariance_update(self, sample, mean, C, n_samples, offset=0):
-        """ Helper function to accumulate covariance and mean information
-        incrementally. To be used for mini-batch training via partial_fit.
-        """
-        if n_samples == 0:
-            mean = sample
-            C = np.outer(sample - mean, sample - mean)
-        else:
-            new_mean = mean + (sample - mean) / (n_samples + 1)
-            C = (C * (n_samples - offset) + np.outer(sample - new_mean, sample - mean))/(n_samples + 1 - offset)
-            mean = new_mean
-        n_samples += 1
-        return mean, C, n_samples
-
     def partial_fit(self, X):
+        n_samples = X.shape[0]
+        assert(not self.is_fitted_)
+        if self.batch_size is None:
+            self._accumulate(X)
+            self.last_partial_sample = X[-1]
+        else:
+            n_batches = math.ceil(n_samples/self.batch_size)
+            for batch_idx in range(n_batches):
+                current_batch = X[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
+                self._accumulate(current_batch)
+                self.last_partial_sample = current_batch[-1]
+        self.partially_fitted = True
+        return self
+
+    def receptive_fit(self, X):
+        n_samples = X.shape[0]
+        assert(not self.is_fitted_)
+        if self.batch_size is None:
+            self._accumulate(X)
+            self.last_partial_sample = X[-1]
+        else:
+            n_batches = math.ceil(n_samples/self.batch_size)
+            for batch_idx in range(n_batches):
+                current_batch = X[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
+                self._accumulate(current_batch)
+                self.last_partial_sample = current_batch[-1]
+        self.partially_fitted = True
+        return self
+
+    def _accumulate(self, X):
         """ This function is meant for mini-batch training and collects covariance
         and mean information of the provided mini-batches.
         Training is finished as soon as transform is called or if the model has been
         fitted by full-batch training.
         """
-        assert(not self.is_fitted_)
         diff_X = X[1:] - X[:-1]
-        for sample in X:
-            self.mean, self.partial_covariance, self.n_partial_samples = self._covariance_update(sample, self.mean, self.partial_covariance, self.n_partial_samples, offset=1)
-        for sample in diff_X:
-            self.diff_mean, self.partial_diff_covariance, self.n_partial_diff_samples = self._covariance_update(sample, self.diff_mean, self.partial_diff_covariance, self.n_partial_diff_samples)
-        self.partially_fitted = True
+        if self.n_partial_samples == 0:
+            self.sample_sum = X.sum(axis=0)
+            self.outer_sum = np.dot(X.T, X)
+            self.n_partial_samples = X.shape[0]
+        else:
+            self.sample_sum += X.sum(axis=0)
+            self.outer_sum += np.dot(X.T, X)
+            self.n_partial_samples += X.shape[0]
+
+        if self.n_partial_diff_samples == 0:
+            self.sample_diff_sum = diff_X.sum(axis=0)
+            self.outer_diff_sum = np.dot(diff_X.T, diff_X)
+            self.n_partial_diff_samples = diff_X.shape[0]
+        else:
+            last_partial_diff = X[0] - self.last_partial_sample
+            self.sample_diff_sum += diff_X.sum(axis=0)# + last_partial_diff
+            self.outer_diff_sum += np.dot(diff_X.T, diff_X)# + np.dot(last_partial_diff[:, None], last_partial_diff[None, :])
+            self.n_partial_diff_samples += diff_X.shape[0]# + 1
         return self
 
     def _fit(self, X):
@@ -333,7 +362,9 @@ class SFA(TransformerMixin, BaseEstimator):
         Instead, a generalized eigenvalue problem from accumulated covariance
         matrices is solved.
         """
-        self.partial_eigenvalues, self.partial_eigenvectors = sp.linalg.eigh(self.partial_diff_covariance, self.partial_covariance)
+        C = (self.outer_sum  - np.outer(self.sample_sum, self.sample_sum)/(self.n_partial_samples)) / (self.n_partial_samples - 1)
+        Cdot = self.outer_diff_sum/(self.n_partial_diff_samples - 1)
+        self.partial_eigenvalues, self.partial_eigenvectors = sp.linalg.eigh(Cdot, C)
 
     def _compute_delta_values(self):
         """ Computes the delta values, but in compliance with the method
@@ -377,7 +408,7 @@ class SFA(TransformerMixin, BaseEstimator):
         """
         X = check_array(X, dtype=[np.float64, np.float32],
                         ensure_2d=True, copy=self.copy)
-        if (self.is_fitted_):
+        if (self.is_fitted_) and (not self.partially_fitted):
             y = self.pca_whiten_.transform(X)
             y = y[:, self.nontrivial_indices_]
             y = self.pca_diff_.transform(y)
@@ -395,7 +426,7 @@ class SFA(TransformerMixin, BaseEstimator):
                 # fit using accumulated covariance matrices
                 self._fit_generalized_eigenmethod()
                 self.is_fitted_ = True
-            y = np.dot(X - self.mean, self.partial_eigenvectors)[:, :self.n_components]
+            y = np.dot(X, self.partial_eigenvectors[:, :self.n_components]) - np.dot(self.sample_sum/(self.n_partial_samples), self.partial_eigenvectors[:, :self.n_components])
         return y
 
     def _compute_parameters(self):
