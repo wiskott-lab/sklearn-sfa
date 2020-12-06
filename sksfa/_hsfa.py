@@ -266,6 +266,7 @@ class HSFA:
             print(f"\toutput shape: \t\t{output_shape + (n_components,)}")
         print(f"Final Layer:")
         print("\tfully connected")
+        print(f"\texpansion degree \t{self.final_degree}")
         print(f"\toutput shape \t\t({self.n_components},)")
         print()
         print()
