@@ -7,6 +7,8 @@ sklearn-sfa - An implementation of Slow Feature Analysis compatible with scikit-
 
 .. _documentation: https://sklearn-sfa.readthedocs.io/en/latest/index.html
 
+.. _MDP: https://mdp-toolkit.github.io/
+
 **sklearn-sfa** or **sksfa** is an implementation of Slow Feature Analysis for scikit-learn_.
 
 It is meant as a standalone transformer for dimensionality reduction or as a building block
@@ -17,6 +19,12 @@ The package contains a solver for linear SFA and some auxiliary functions. The d
 provides an explanation of the algorithm, different use-cases, as well as pointers how to 
 fully utilize SFA's potential, e.g., by employing non-linear basis functions or more sophisticated 
 architectures.
+
+For use with high-dimensional image data, sklearn-sfa now also includes an experimental implementation of 
+**Hierarchical SFA networks (HSFA)** - please consult the introductory examples in the documentation.
+
+Since sklearn-sfa is in its early stages, we also recommend taking a look at the **Modular Toolkit for Data Processing** MDP_ 
+which provides stable SFA implementations that have stood the test of time.
 
 Installation 
 ------------
