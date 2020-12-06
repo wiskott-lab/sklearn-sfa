@@ -205,14 +205,23 @@ class SFA(TransformerMixin, BaseEstimator):
         return self
 
     def partial(self, X, y=None):
+        """Fit the model on a part of your dataset. This is used mainly for
+        processing in hierarchical SFA.
+        This is not the same as 'fit' using a batch-size.
+
+        Parameters
+        ----------
+        X : {array-like}, shape (n_samples, n_features)
+            The training input samples. If batch_size was set on init,
+            this is assumed to be composed of concatenated time-series
+            of batch_size length.
+        """
         n_samples = X.shape[0]
         assert(not self.is_fitted)
         if not self.is_partially_fitted:
             self._diff_sum = None
             self._n_partial_samples = 0
             self._n_partial_diff_samples = 0
-            #self.partial_outersum = None
-            #self.partial_diff_outersum = None
             self._partial_eigenvectors = None
             self._partial_eigenvalues = None
         if self.batch_size is None:

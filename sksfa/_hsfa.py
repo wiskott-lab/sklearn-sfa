@@ -44,10 +44,87 @@ class Clipper:
 
 
 class HSFA:
+    """Hierarchical Slow Feature Analysis (HSFA).
+
+    A network of quadratic SFA estimators interlaced with receptive field transformers
+    and linear SFA estimators for intermediate pre-expansion dimensionality reduction.
+    This can deal with high-dimensional image time-series significantly better than
+    standard (non-linear) SFA by using receptive fields to slice the images in a way
+    comparable convolutional layers in neural networks.
+
+    In each layer, the image representation is first sliced into receptive fields that
+    are defined by field-dimensions and corresponding strides. The field inputs are then
+    fed as flattened input-batches to a combination of linear SFA (for dimensionality
+    reduction), quadratic polynomial expansion, and linear SFA (for feature extraction).
+    The dimension after the reduction is the same as the number of subsequently extracted
+    features and can be specified for each layer individually.
+    The final layer does not need to be specified and always consists of the same combination,
+    but without prior slicing into receptive fields.
+
+    Important: SFA estimators cannot be further fit after using them to transform input. This
+    is why for training an HSFA network, the data has to be repeatedly fed through the network
+    until the last layer is trained. HSFA's 'fit' function will take care of the logistics of
+    that.
+
+    ----------
     def __init__(self, n_components, input_shape, layer_configurations, internal_batch_size=50, noise_std=0.05, verbose=False):
-        """ 
-        This class builds an HSFA network according to the specifications given by layer_configurations".
-        Layer configurations need to contain: (field_w, field_h, stride_w, stride_h, n_components) """
+    n_components : int
+        Number of features extracted by the complete network.
+    input_shape : tuple (int)
+        The shape of a single input (i.e., without sample-dimension) to the
+        input layer.
+    layer_configurations : list of 5-tuples
+        A list of tuples to configure the intermediate layers. Each tuple needs to contain:
+        (field_width, field_height, stride_width, stride_height, n_intermediate_components)
+    internal_batch_size : int, default=50
+        The size of mini-batches used internally. This should not be chosen too small as
+        the SFA nodes at this point do not respect connections between batches.
+    noise_std : float, default=0.05
+        Additive noise added at intermediate layers. Crank this up if you run into problems
+        with singular covariance matrices during training. This noise will not be applied
+        at transformation time.
+        In general, this has a slight regularizing effect, but should not be chosen too high.
+        If you run into repeated problems, consider changing your network architecture and/or
+        increase the size of your dataset.
+    verbose : bool, default=False
+        This switch decides if there will be some additional info printed during training.
+
+    Attributes
+    ----------
+    layer_configurations : list of tuples
+        This contains all layer configurations except the final, fully-connected one.
+    input_shape : tuple
+        See 'input_shape' parameter.
+    internal_batch_size : int
+        See 'internal_batch_size' parameter.
+    n_components : int
+        The number of output features.
+    sequence : list of transformers/estimators
+        This list will contain the used transformers and estimators in correct order.
+    layer_outputs : list
+        This list will contain all the output shapes of all intermediate layers.
+    self.
+
+    Examples
+    --------
+    >>> from sksfa import HSFA
+    >>> import numpy as np
+    >>> n_samples = 5000
+    >>> image_width, image_height = 10, 10
+    >>> dimension = image_width * image_height
+    >>> t = np.linspace(0, 8*np.pi, n_samples).reshape(n_samples, 1)
+    >>> t = t * np.arange(1, dimension + 1)
+    >>>
+    >>> ordered_cosines = np.cos(t)
+    >>> mixed_cosines = np.dot(ordered_cosines, np.random.normal(0, 1, (dimension, dimension)))
+    >>> mixed_cosines = mixed_cosines.reshape(n_samples, image_width, image_height, 1)
+    >>> layer_configurations = [(5, 5, 5, 5, 4)]
+    >>>
+    >>> hsfa = HSFA(2, mixed_cosines.shape[1:], layer_configurations, noise_std=0.1)
+    >>> hsfa = hsfa.fit(mixed_cosines)
+    >>> unmixed_cosines = hsfa.transform(mixed_cosines)
+   """
+    def __init__(self, n_components, input_shape, layer_configurations, internal_batch_size=50, noise_std=0.05, verbose=False):
         self.layer_configurations = layer_configurations
         self.verbose = verbose
         self.input_shape = input_shape
@@ -150,6 +227,8 @@ class HSFA:
         return result
 
     def summary(self):
+        """ Prints a summary of the network architecture.
+        """
         print()
         print(" = = = = NETWORK ARCHITECTURE = = = = ")
         print()
