@@ -36,11 +36,11 @@ test_data = data[split_idx:]
 test_gt = ground_truth[split_idx:]
 
 # Preparing the HSFA-network:
-# - each layer needs a 5-tuple for configuration
-# - each 5-tuple contains (kernel_width, kernel_height, stride_width, stride_height, n_features)
+# - each layer needs a 6-tuple for configuration
+# - each 6-tuple contains (kernel_width, kernel_height, stride_width, stride_height, n_features, expansion_degree)
 # The final layer will always be a full connected SFA layer
-layer_configurations = [(8, 8, 8, 8, 8),
-                        (2, 2, 2, 2, 8)]
+layer_configurations = [(8, 8, 8, 8, 8, 1),
+                        (2, 2, 2, 2, 8, 2)]
 
 hsfa = HSFA(n_components=2,
             input_shape=data.shape[1:],
