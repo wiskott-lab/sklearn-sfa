@@ -193,7 +193,7 @@ class HSFA:
         accumulating_indices = [idx for idx, member in enumerate(self.sequence) if type(member) == SFA]
         accumulating_indices += [len(self.sequence)]
         last_idx = -1
-        if verbose:
+        if self.verbose:
             try:
                 from tqdm import tqdm
             except ImportError:
@@ -222,7 +222,7 @@ class HSFA:
         n_batches = int(np.ceil(n_samples / batch_size))
         result = None
         sequence = self.sequence if seq_end is None else self.sequence[:seq_end]
-        if verbose:
+        if self.verbose:
             try:
                 from tqdm import tqdm
             except ImportError:
