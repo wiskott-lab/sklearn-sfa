@@ -1,5 +1,4 @@
 import numpy as np
-from tqdm import tqdm
 from sksfa.utils import ReceptiveRebuilder, ReceptiveSlicer
 from sklearn.preprocessing import PolynomialFeatures
 from sksfa import SFA
@@ -194,7 +193,15 @@ class HSFA:
         accumulating_indices = [idx for idx, member in enumerate(self.sequence) if type(member) == SFA]
         accumulating_indices += [len(self.sequence)]
         last_idx = -1
-        for idx in tqdm(accumulating_indices):
+        if verbose:
+            try:
+                from tqdm import tqdm
+            except ImportError:
+                raise ImportError("If 'verbose' is used, tqdm package needs to be installed")
+            iterator = tqdm(accumulating_indices)
+        else:
+            iterator = accumulating_indices
+        for idx in iterator:
             transform_only = self.sequence[:last_idx+1]
             partial_sequence = self.sequence[last_idx+1:idx]
             for batch_idx in range(n_batches):
@@ -215,7 +222,15 @@ class HSFA:
         n_batches = int(np.ceil(n_samples / batch_size))
         result = None
         sequence = self.sequence if seq_end is None else self.sequence[:seq_end]
-        for batch_idx in tqdm(range(n_batches)):
+        if verbose:
+            try:
+                from tqdm import tqdm
+            except ImportError:
+                raise ImportError("If 'verbose' is used, tqdm package needs to be installed")
+            iterator = tqdm(range(n_batches))
+        else:
+            iterator = range(n_batches)
+        for batch_idx in iterator:
             current_batch = X[batch_idx * batch_size: (batch_idx + 1) * batch_size]
             for transformer in sequence:
                 if type(transformer) == AdditiveNoise:
