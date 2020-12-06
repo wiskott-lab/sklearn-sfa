@@ -258,7 +258,7 @@ this assumption, intermediate reduction can also be done by SFA:
 
 There are more sophisticated constructions of non-linear SFA using receptive fields called *Hierarchical SFA (HSFA)*.
 These are recommended for high-dimensional data with significant local structure (e.g., image data).
-HSFA is currently not implemented in this package.
+HSFA is implemented in this package, but should be considered **experimental**!
 
 Inspection and evaluation
 -------------------------
@@ -268,7 +268,7 @@ To be added.
 Time Complexity
 ---------------
 
-The time complexity of training SFA is mainly dominated by the PCA computation [4]_. Since SFA always has to perform PCA for a full-range of output components before selecting the slowest ones (minor components), it cannot utilize the number of output features beforhand, this means:
+The time complexity of training using the SFA estimator's *fit* function is mainly dominated by the PCA computation [4]_. Since SFA always has to perform PCA for a full-range of output components before selecting the slowest ones (minor components), it cannot utilize the number of output features beforhand, this means:
 
 .. math::
    :nowrap:

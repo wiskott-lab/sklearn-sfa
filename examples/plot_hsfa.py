@@ -1,6 +1,6 @@
 """
 ============
-Moving Digit (Expeirmental - Hierarchical SFA)
+Moving Digit (Experimental - Hierarchical SFA)
 ============
 An example of :class:`sksfa.HSFA` applied to a simple image time-series:
 a one-digit version of the moving MNIST dataset. Each data point is 4096-dimensional.
