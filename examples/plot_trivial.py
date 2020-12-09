@@ -1,12 +1,14 @@
 """
 =============================
-Fill modes for missing dimensions
+Fill Modes (for Missing Dimensions)
 =============================
 
-An example plot of the different fill modes of :class:`sksfa.SFA`. The input data does only have effective
-dimension two (the other dimensions are linearly dependent), but three slow features are to be extracted.
-The different fill_mode options will fill the missing signals in different ways. Setting 'fill_mode' to
-None, would make the transformer throw an such a case.
+An example plot of the different fill modes of :class:`sksfa.SFA`.
+
+The input data does only have effective dimension 2 (the other dimensions are linearly dependent),
+but 3 slow features are set to be extracted. The different fill_mode options will fill the missing
+features in different ways.
+Setting 'fill_mode' to None, would make the transformer throw an exception.
 """
 
 
