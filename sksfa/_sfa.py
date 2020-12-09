@@ -81,7 +81,7 @@ class SFA(TransformerMixin, BaseEstimator):
         considered trivial features and will be replaced in a way
         specified by fill_mode to ensure consistent output-dimensionality.
 
-    fill_mode : str {'zero', 'slowest', 'fastest', 'noise'} or\
+    fill_mode : str {'zero', 'fastest', 'noise'} or\
             None (default 'noise')
         The signal by which to replace output components that are
         artificial dimensions with almost no explained variance in
@@ -90,10 +90,6 @@ class SFA(TransformerMixin, BaseEstimator):
             Output components will be replace with constant zero signals.
             Subsequent applications of SFA will pick this up as a trivial
             signal again.
-        If slowest :
-            Output components will be replaced with copies of the slowest
-            signals. Subsequent applications of SFA will pick this up as
-            linearly dependent input dimension.
         If fastest :
             Output components will be replaced with copies of the fastest
             signals. Subsequent applications of SFA will pick this up as
@@ -198,8 +194,8 @@ class SFA(TransformerMixin, BaseEstimator):
         if issparse(X):
             raise TypeError('SFA does not support sparse input.')
         if (X.shape[1] < 2):
-            raise ValueError(f"At least two dimensional data is needed, \
-                    n_features={X.shape[1]} is too small.")
+            raise ValueError(f"At least two dimensional data is needed, "\
+                    "n_features={X.shape[1]} is too small.")
         self._fit(X)
         self.is_fitted_ = True
         return self
@@ -267,7 +263,7 @@ class SFA(TransformerMixin, BaseEstimator):
         """Fit the model to X either by using minor component extraction
         on the difference time-series of the whitened data or other
         (not yet implemented) method.
-        This is not meant for mini-batch training. 
+        This is not meant for mini-batch training.
         For mini-batch training, use partial_fit instead.
 
         Parameters
@@ -291,10 +287,8 @@ class SFA(TransformerMixin, BaseEstimator):
             this is assumed to be composed of concatenated time-series
             of batch_size length.
         """
-        n_samples, _ = X.shape
+        n_samples, input_dim = X.shape
         self.pca_whiten_.fit(X)
-        #self.mean = self.pca_whiten_.mean_
-
         X_whitened = self.pca_whiten_.transform(X)
 
         # Find non-trivial components
@@ -302,39 +296,13 @@ class SFA(TransformerMixin, BaseEstimator):
         nontrivial_indices = np.argwhere(input_evr > self.robustness_cutoff)
         self.nontrivial_indices_ = nontrivial_indices.reshape((-1,))
         self.n_nontrivial_components_ = self.nontrivial_indices_.shape[0]
-        n_trivial = self.n_components_ - self.n_nontrivial_components_
-        if self.n_nontrivial_components_ == 0:
-            raise ValueError(f"While whitening, only trivial components were \
-                    found. This can be caused by passing 0-only input. ")
-        if n_trivial > 0:
-            if self.fill_mode is not None:
-                warning_string = f"While whitening, {n_trivial} trivial \
-                        components were found. Those are likely caused \
-                        by a low effective dimension of the input data."
-                if self.fill_mode == "zero":
-                    warning_string += " Trivial components will be replaced \
-                            by a 0 signal."
-                if self.fill_mode == "slowest":
-                    warning_string += " Trivial components will be replaced \
-                            by copies of the slowest signal."
-                if self.fill_mode == "fastest":
-                    warning_string += " Trivial components will be replaced \
-                            by copies of the fastest signal."
-                if self.fill_mode == "noise":
-                    warning_string += " Trivial components will be replaced \
-                            by decorrelated white noise."
-                warnings.warn(warning_string, RuntimeWarning)
-            else:
-                raise ValueError(f"While whitening, {n_trivial} trivial \
-                        components were found. Those are likely caused \
-                        by a low effective dimension of the input data. \
-                        Set 'fill_mode' parameter to replace trivial \
-                        features with blind signals.")
+        self.n_trivial_ = input_dim - self.n_nontrivial_components_
         X_whitened = X_whitened[:, self.nontrivial_indices_]
 
         X_diff = X_whitened[1:] - X_whitened[:-1]
         self._diff_mean = X_diff.mean(axis=0)
         X_diff -= self._diff_mean
+
         if self.batch_size is None:
             self.pca_diff_.fit(X_diff)
         else:
@@ -346,8 +314,32 @@ class SFA(TransformerMixin, BaseEstimator):
                 current_batch = X_whitened[batch_start:batch_end]
                 batch_diff = current_batch[1:] - current_batch[:-1]
                 self.pca_diff_.partial_fit(batch_diff - self._diff_mean)
+        if self.n_nontrivial_components_ == 0:
+            raise ValueError(f"While whitening, only trivial components were \
+                    found. This can be caused by passing 0-only input.")
+        if self.n_nontrivial_components_ < self.n_components_:
+            warning_string = f"During whitening, {self.n_trivial_} trivial components "\
+                    "with roughly zero explained variance have been found. This "\
+                    "probably means that the effective dimension of your input is "\
+                    "too low to find the desired {self.n_components_} slow features. "\
+                    "Ways to deal with this are:\n\tInjecting noise via the 'noise_std' "\
+                    "parameter.\n\tProviding more data.\n\tLowering the 'n_components' "\
+                    "parameter.\n\tLowering the threshold 'robustness_cutoff'."
+            if self.fill_mode is not None:
+                warning_string += f"\nSince 'fill_mode' is set to {self.fill_mode}, "\
+                        "missing output features will be filled by "
+                if self.fill_mode == "zero":
+                    warning_string += "a 0 signal."
+                if self.fill_mode == "fastest":
+                    warning_string += "duplicates of the fastest signal."
+                if self.fill_mode == "noise":
+                    warning_string += "independent white-noise."
+                warnings.warn(warning_string, RuntimeWarning)
+            else:
+                warning_string += "\n\tSetting 'fill_mode' to replace trivial components\
+                        with uninformative signals."
+                raise ValueError(warning_string)
         self._compute_delta_values()
-        #self._compute_parameters()
 
     def _fit_generalized_eigenmethod(self):
         """ For mini-batch training, the standard method is not used.
@@ -362,24 +354,23 @@ class SFA(TransformerMixin, BaseEstimator):
         """ Computes the delta values, but in compliance with the method
             chosen for handling trivial components.
         """
-        output_ev = self.pca_diff_.explained_variance_
-        delta_values_ = output_ev[self.nontrivial_indices_][::-1]
-        n_trivial = self.n_components_ - self.n_nontrivial_components_
-        if n_trivial > 0:
+        delta_values_ = self.pca_diff_.explained_variance_[::-1]
+        n_missing_components = self.n_components_ - self.n_nontrivial_components_
+        if n_missing_components > 0:
             if self.fill_mode == "zero":
                 delta_values_ = np.pad(delta_values_,
-                                       (0, n_trivial), "constant",
+                                       (0, n_missing_components), "constant",
                                        constant_values=np.nan)
-            if self.fill_mode == "slowest":
-                delta_values_ = np.pad(delta_values_,
-                                       (n_trivial, 0),
-                                       "constant",
-                                       constant_values=delta_values_[0])
             if self.fill_mode == "fastest":
                 delta_values_ = np.pad(delta_values_,
-                                       (0, n_trivial),
+                                       (0, n_missing_components),
                                        "constant",
                                        constant_values=delta_values_[-1])
+            if self.fill_mode == "noise":
+                delta_values_ = np.pad(delta_values_,
+                                       (0, n_missing_components),
+                                       "constant",
+                                       constant_values=2)
         self.delta_values_ = delta_values_
 
     def transform(self, X):
@@ -410,9 +401,14 @@ class SFA(TransformerMixin, BaseEstimator):
                     y = np.pad(y, ((0, 0), (n_missing_components, 0)))
                 if self.fill_mode == "fastest":
                     y = np.pad(y, ((0, 0), (n_missing_components, 0)), "edge")
-                if self.fill_mode == "slowest":
-                    y = np.pad(y, ((0, 0), (0, n_missing_components)), "edge")
-            y = y[:, -self.n_components_:][:, ::-1]
+                if self.fill_mode == "noise":
+                    missing = np.random.normal(0, 1, (y.shape[0], n_missing_components))
+                    missing -= missing.mean(axis=0)
+                    missing /= missing.std(axis=0)
+                    y = np.hstack([missing, y])
+                return y[:, ::-1]
+            else:
+                y = y[:, -self.n_components_:][:, ::-1]
         elif (self.is_partially_fitted):
             if not (self.is_fitted):
                 # fit using accumulated covariance matrices
