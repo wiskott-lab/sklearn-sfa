@@ -193,9 +193,9 @@ class SFA(TransformerMixin, BaseEstimator):
         self._initialise_pca()
         if issparse(X):
             raise TypeError('SFA does not support sparse input.')
-        if (X.shape[1] < 2):
-            raise ValueError(f"At least two dimensional data is needed, "\
-                    "n_features={X.shape[1]} is too small.")
+        #if (X.shape[1] < 2):
+        #    raise ValueError(f"At least two dimensional data is needed, "\
+        #            "n_features={X.shape[1]} is too small.")
         self._fit(X)
         self.is_fitted_ = True
         return self
