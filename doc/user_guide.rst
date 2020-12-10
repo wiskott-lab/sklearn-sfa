@@ -276,6 +276,7 @@ HSFA is implemented in this package, but should be considered **experimental**!
 .. image:: rf_gifs/with_overlay.gif
   :width: 30% 
 Look ma, no newline
+
 .. image:: rf_gifs/concat.gif
   :width: 15% 
 
