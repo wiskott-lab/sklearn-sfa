@@ -265,8 +265,10 @@ Hierarchical Networks
 """""""""""""""""""""
 
 If even low degree expansions are infeasible and initial reduction by linear SFA would likely lead to significant loss of relevant information, additional structure has to be assumed for the data. 
+
 Luckily, one of the most common sources of high-dimensional data is image data (e.g., from a video or camera sensors), which naturally provides a lot of additional structure:
-For images, we can typically assume that it is sufficient to capture only **local** relationships in early processing. That means, in first dimensionality reduction steps, we do not lose much information if we only capture relationships between nearby pixels and discard relationships between pixels that are far apart. It is also reasonble to assume, that this local structure is invariant for all parts of the input image.
+For images, we can typically assume that it is sufficient to capture only **local** relationships in early processing. That means, in first dimensionality reduction steps, we do not lose much information if we only capture relationships between nearby pixels and discard relationships between pixels that are far apart. 
+It is also reasonble to assume, that this local structure is invariant for all parts of the input image.
 A very prominent example of models exploiting exactly these structural properties are convolutional neural networks.
 
 For SFA, this is typically done using a method called *Hierarchical SFA (HSFA)*. The original images are sliced into -- possibly overlapping -- receptive fields, thereby using the assumption that local relationships are sufficient.
