@@ -264,29 +264,34 @@ this assumption, intermediate reduction can also be done by SFA:
 Hierarchical Networks
 """""""""""""""""""""
 
-If even low degree expansions are infeasible and initial reduction by linear SFA would likely lead to significant loss of relevant information, additional structure has to be assumed for the data. Luckily, one of the most common sources of high-dimensional data is image data (e.g., from a video or camera sensors), which naturally provides a lot of additional structure:
+If even low degree expansions are infeasible and initial reduction by linear SFA would likely lead to significant loss of relevant information, additional structure has to be assumed for the data. 
+Luckily, one of the most common sources of high-dimensional data is image data (e.g., from a video or camera sensors), which naturally provides a lot of additional structure:
 For images, we can typically assume that it is sufficient to capture only **local** relationships in early processing. That means, in first dimensionality reduction steps, we do not lose much information if we only capture relationships between nearby pixels and discard relationships between pixels that are far apart. It is also reasonble to assume, that this local structure is invariant for all parts of the input image.
 A very prominent example of models exploiting exactly these structural properties are convolutional neural networks.
 
-For SFA, this is typically done using a method called *Hierarchical SFA (HSFA)*. The original images are sliced into -- possibly overlapping -- receptive fields, thereby using the assumption that local relationships are sufficient. A single (typically quadratic) SFA is then trained on all resulting time-series' and the image is transformed to a map of features. Using a single model for all parts of the images exploits the assumption that local structure is invariant of actual position in the image. These steps can then be repeated multiple times, keeping neighborhood relations between fields intact. 
-
-If the dimension has been sufficiently reduced and a sufficient amount of non-linearity has been injected into the model, a final SFA is used to extract the desired number of output features from the preceeding layer.
-HSFA is implemented in this package, but should be considered **experimental**!
+For SFA, this is typically done using a method called *Hierarchical SFA (HSFA)*. The original images are sliced into -- possibly overlapping -- receptive fields, thereby using the assumption that local relationships are sufficient.
+The animation below shows four non-overlapping receptive fields on a simple image time-series.
 
 .. image:: rf_gifs/with_overlay.gif
-  :width: 30% 
-Look ma, no newline
+  :width: 40% 
+   :align: center
+
+Each receptive field will generate a time-series containing only the covered section. A single non-linear SFA is then trained on all resulting time-series', preceded by a linear SFA step. The animation below shows the input used to train this layer's SFA:
 
 .. image:: rf_gifs/concat.gif
-  :width: 15% 
+  :width: 20% 
+   :align: center
+
+The output slow features make for a single "pixel" of the layer's output, with the features as channels: Thus, if we would extract 8 features per field, a single output would be of shape (2, 2, 8). This procedure can then be repeated until a sufficiently low dimensionality has been reached and/or a sufficient amount of non-linearity has been injected into the model. 
+Afterwards, the output will be flattened into vectors and a final SFA is used to extract the desired number of output features.
+
+HSFA is implemented in this package, but should be considered **experimental**!
+
 
 Inspection and evaluation
 -------------------------
 
 To be added.
-
-.. image:: rf_gifs/with_overlay.gif
-   :align: center
 
 Time Complexity
 ---------------
