@@ -274,10 +274,9 @@ If the dimension has been sufficiently reduced and a sufficient amount of non-li
 HSFA is implemented in this package, but should be considered **experimental**!
 
 .. image:: rf_gifs/with_overlay.gif
-   :align: center
-
+  :width: 66% 
 .. image:: rf_gifs/concat.gif
-   :align: center
+  :width: 33% 
 
 Inspection and evaluation
 -------------------------
