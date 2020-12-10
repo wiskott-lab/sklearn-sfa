@@ -275,16 +275,18 @@ HSFA is implemented in this package, but should be considered **experimental**!
 
 |with_overlay| -> |concat|
 
-.. |with_overlay| image:: ./rf_gifs/with_overlay.gif
+.. |with_overlay| image:: rf_gifs/with_overlay.gif
    :align: center
 
-.. |concat| image:: ./rf_gifs/concat.gif
+.. |concat| image:: rf_gifs/concat.gif
    :align: center
 
 Inspection and evaluation
 -------------------------
 
 To be added.
+.. image:: rf_gifs/with_overlay.gif
+   :align: center
 
 Time Complexity
 ---------------
