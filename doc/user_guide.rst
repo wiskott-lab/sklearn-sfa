@@ -243,7 +243,8 @@ More compactly, this can be connected in a scikit-learn ``Pipeline``:
 
 Note that non-linear expansion is a standard trick in classical approximation and machine learning and not specific to SFA.
 
-#### Cascading
+Cascading
+"""""""""
 
 If expansion to polynomials of higher degree are needed, but the expanded dimensionality would be too high, **cascading** can be used. 
 When cascading SFA, lower order polynomial expansions are subsequently applied, but interlaced with dimensionality reduction steps. 
@@ -260,11 +261,19 @@ this assumption, intermediate reduction can also be done by SFA:
    cascaded_sfa = Pipeline(cascade)
    output_features = cascaded_sfa.fit_transform(data)
 
-#### Hierarchical Networks
+Hierarchical Networks
+"""""""""""""""""""""
 
-There are more sophisticated constructions of non-linear SFA using receptive fields called *Hierarchical SFA (HSFA)*.
-These are recommended for high-dimensional data with significant local structure (e.g., image data).
+If even low degree expansions are infeasible and initial reduction by linear SFA would likely lead to significant loss of relevant information, additional structure has to be assumed for the data. Luckily, one of the most common sources of high-dimensional data is image data (e.g., from a video or camera sensors), which naturally provides a lot of additional structure:
+For images, we can typically assume that it is sufficient to capture only **local** relationships in early processing. That means, in first dimensionality reduction steps, we do not lose much information if we only capture relationships between nearby pixels and discard relationships between pixels that are far apart. It is also reasonble to assume, that this local structure is invariant for all parts of the input image.
+A very prominent example of models exploiting exactly these structural properties are convolutional neural networks.
+
+For SFA, this is typically done using a method called *Hierarchical SFA (HSFA)*. The original images are sliced into -- possibly overlapping -- receptive fields, thereby using the assumption that local relationships are sufficient. A single (typically quadratic) SFA is then trained on all resulting time-series' and the image is transformed to a map of features. Using a single model for all parts of the images exploits the assumption that local structure is invariant of actual position in the image. These steps can then be repeated multiple times, keeping neighborhood relations between fields intact. 
+
+If the dimension has been sufficiently reduced and a sufficient amount of non-linearity has been injected into the model, a final SFA is used to extract the desired number of output features from the preceeding layer.
 HSFA is implemented in this package, but should be considered **experimental**!
+
+
 
 Inspection and evaluation
 -------------------------
