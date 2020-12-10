@@ -273,7 +273,13 @@ For SFA, this is typically done using a method called *Hierarchical SFA (HSFA)*.
 If the dimension has been sufficiently reduced and a sufficient amount of non-linearity has been injected into the model, a final SFA is used to extract the desired number of output features from the preceeding layer.
 HSFA is implemented in this package, but should be considered **experimental**!
 
+|with_overlay| -> |concat|
 
+.. |with_overlay| image:: ./rf_gifs/with_overlay.gif
+   :align: center
+
+.. |concat| image:: ./rf_gifs/concat.gif
+   :align: center
 
 Inspection and evaluation
 -------------------------
