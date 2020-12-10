@@ -273,19 +273,19 @@ For SFA, this is typically done using a method called *Hierarchical SFA (HSFA)*.
 The animation below shows four non-overlapping receptive fields on a simple image time-series.
 
 .. image:: rf_gifs/with_overlay.gif
-  :width: 40% 
+   :width: 40% 
    :align: center
 
-Each receptive field will generate a time-series containing only the covered section. A single non-linear SFA is then trained on all resulting time-series', preceded by a linear SFA step. The animation below shows the input used to train this layer's SFA:
+Each receptive field will generate a time-series containing only the covered section. A single non-linear SFA is then trained on all resulting time-series', preceded by a linear SFA step. The animation below shows the input used to train this layer's SFA. The steps between fields are **not** considered connected, but each color indicates an independent time-series.
 
 .. image:: rf_gifs/concat.gif
-  :width: 20% 
+   :width: 20% 
    :align: center
 
-The output slow features make for a single "pixel" of the layer's output, with the features as channels: Thus, if we would extract 8 features per field, a single output would be of shape (2, 2, 8). This procedure can then be repeated until a sufficiently low dimensionality has been reached and/or a sufficient amount of non-linearity has been injected into the model. 
+The output slow features make for a single "pixel" of the layer's output, with the features as channels: Thus, if we would extract 8 features per field, a single output would be of shape (2, 2, 8). This procedure is repeated until a sufficiently low dimensionality has been reached and/or a sufficient amount of non-linearity has been injected into the model. 
 Afterwards, the output will be flattened into vectors and a final SFA is used to extract the desired number of output features.
 
-HSFA is implemented in this package, but should be considered **experimental**!
+For convenience, HSFA is implemented in this package. It should, however, be considered **experimental** at this point in time.
 
 
 Inspection and evaluation
