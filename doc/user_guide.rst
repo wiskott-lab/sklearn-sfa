@@ -241,6 +241,10 @@ More compactly, this can be connected in a scikit-learn ``Pipeline``:
                                   ("SFA", SFA(n_components=2)])
    output_features = quadratic_sfa.fit_transform(data)
 
+Note that non-linear expansion is a standard trick in classical approximation and machine learning and not specific to SFA.
+
+#### Cascading
+
 If expansion to polynomials of higher degree are needed, but the expanded dimensionality would be too high, **cascading** can be used. 
 When cascading SFA, lower order polynomial expansions are subsequently applied, but interlaced with dimensionality reduction steps. 
 In practice, it is often assumed that highly expressive slow features can be constructed from less expressive slow features. Relying on 
@@ -255,6 +259,8 @@ this assumption, intermediate reduction can also be done by SFA:
          cascade.append((f"SFA{step}", SFA(n_components=2)))
    cascaded_sfa = Pipeline(cascade)
    output_features = cascaded_sfa.fit_transform(data)
+
+#### Hierarchical Networks
 
 There are more sophisticated constructions of non-linear SFA using receptive fields called *Hierarchical SFA (HSFA)*.
 These are recommended for high-dimensional data with significant local structure (e.g., image data).
