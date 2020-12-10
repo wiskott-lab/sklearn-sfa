@@ -274,9 +274,10 @@ If the dimension has been sufficiently reduced and a sufficient amount of non-li
 HSFA is implemented in this package, but should be considered **experimental**!
 
 .. image:: rf_gifs/with_overlay.gif
-  :width: 66% 
+  :width: 30% 
+Look ma, no newline
 .. image:: rf_gifs/concat.gif
-  :width: 33% 
+  :width: 15% 
 
 Inspection and evaluation
 -------------------------
