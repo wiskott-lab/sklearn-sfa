@@ -154,7 +154,7 @@ Additionally, SFA typically produces ordered output features, that means:
 
 
 Solving linear SFA
-__________________
+------------------
 
 This package implements a way to solve the SFA problem for the case that :math:`\mathcal{F}` is the family of linear/affine functions, where each model can be
 parameterized by a matrix :math:`\mathbf{W}` as well a bias vector :math:`\mathbf{b}` as:
@@ -214,7 +214,7 @@ Together, this gives us a closed-form solution for linear functions:
    \end{eqnarray*}
 
 Learning non-linear maps
-________________________
+------------------------
 
 Even though the vanilla SFA is defined to learn linear mappings, this restriction can easily be alleviated by expansion into a non-linear basis, such as polynomials on the input data. Native non-linear formulations exist, but are out-of-scope for this package.
 
@@ -244,7 +244,7 @@ More compactly, this can be connected in a scikit-learn ``Pipeline``:
 Note that non-linear expansion is a standard trick in classical approximation and machine learning and not specific to SFA.
 
 Cascading
-"""""""""
+_________
 
 If expansion to polynomials of higher degree are needed, but the expanded dimensionality would be too high, **cascading** can be used. 
 When cascading SFA, lower order polynomial expansions are subsequently applied, but interlaced with dimensionality reduction steps. 
@@ -261,8 +261,12 @@ this assumption, intermediate reduction can also be done by SFA:
    cascaded_sfa = Pipeline(cascade)
    output_features = cascaded_sfa.fit_transform(data)
 
-Hierarchical Networks
-"""""""""""""""""""""
+In this case, three quadratic expansions are performed, effectively leading to output polynomials of degree 8. Even though they do
+not capture all information a direct and full expansion might, cascading is typically preferred to directly expanding with high degrees
+for improved generalization and tractability.
+
+Hierarchical Networks (HSFA)
+____________________________
 
 If even low degree expansions are infeasible and initial reduction by linear SFA would likely lead to significant loss of relevant information, additional structure has to be assumed for the data. 
 
