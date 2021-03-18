@@ -71,11 +71,31 @@ def test_sfa_detects_rank_deficit(dimension, rank_deficit):
     with pytest.raises(ValueError):
         sfa.fit(current_data)
 
-#@pytest.mark.parametrize("dimension,n_samples", [(dimension, 1000 * n_kilosamples) \
- #       for dimension in range(2, MAX_TEST_DIM) for n_kilosamples in range(1, MAX_TEST_N_KILOSAMPLES + 1, 5)])
-#def test_sfa_parameter_computation(dimension, n_samples):
-#    current_data = mixed_trigonometric_functions(dimension, n_samples)
-#    sfa = SFA()
-#    slow_features = sfa.fit_transform(current_data)
-#    slow_features_from_parameters = np.dot(current_data - sfa.mean_, sfa.components_.T)
-#    assert np.allclose(slow_features, slow_features_from_parameters)
+@pytest.mark.parametrize("dimension,n_samples", [(dimension, 1000 * n_kilosamples) \
+        for dimension in range(2, MAX_TEST_DIM) for n_kilosamples in range(1, MAX_TEST_N_KILOSAMPLES + 1, 5)])
+def test_sfa_parameter_computation(dimension, n_samples):
+    current_data = mixed_trigonometric_functions(dimension, n_samples)
+    sfa = SFA()
+    slow_features = sfa.fit_transform(current_data)
+    W, b = sfa.affine_parameters_()
+    affine_transformed = np.dot(current_data, W.T) + b
+    assert np.allclose(slow_features, affine_transformed)
+
+@pytest.mark.parametrize("dimension,rank_deficit", [(dimension, rank_deficit) \
+        for dimension in range(2, MAX_TEST_DIM) for rank_deficit in range(1, dimension)])
+def test_sfa_parameter_computation_rank_deficit_zero_fill(dimension, rank_deficit):
+    current_data = mixed_trigonometric_functions(dimension, rank_deficit=rank_deficit)
+    sfa = SFA(fill_mode="zero")
+    slow_features = sfa.fit_transform(current_data)
+    W, b = sfa.affine_parameters_()
+    affine_transformed = np.dot(current_data, W.T) + b
+    assert np.allclose(slow_features, affine_transformed)
+
+@pytest.mark.parametrize("dimension,rank_deficit", [(dimension, rank_deficit) \
+        for dimension in range(2, MAX_TEST_DIM) for rank_deficit in range(1, dimension + 1)])
+def test_sfa_parameter_computation_rank_deficit_nonzero_fill(dimension, rank_deficit):
+    current_data = mixed_trigonometric_functions(dimension, rank_deficit=rank_deficit)
+    sfa = SFA(fill_mode="noise")
+    slow_features = sfa.fit_transform(current_data)
+    with pytest.raises(RuntimeError):
+      W, b = sfa.affine_parameters_()
