@@ -77,7 +77,7 @@ def test_sfa_parameter_computation(dimension, n_samples):
     current_data = mixed_trigonometric_functions(dimension, n_samples)
     sfa = SFA()
     slow_features = sfa.fit_transform(current_data)
-    W, b = sfa.affine_parameters_()
+    W, b = sfa.affine_parameters()
     affine_transformed = np.dot(current_data, W.T) + b
     assert np.allclose(slow_features, affine_transformed)
 
@@ -87,7 +87,7 @@ def test_sfa_parameter_computation_rank_deficit_zero_fill(dimension, rank_defici
     current_data = mixed_trigonometric_functions(dimension, rank_deficit=rank_deficit)
     sfa = SFA(fill_mode="zero")
     slow_features = sfa.fit_transform(current_data)
-    W, b = sfa.affine_parameters_()
+    W, b = sfa.affine_parameters()
     affine_transformed = np.dot(current_data, W.T) + b
     assert np.allclose(slow_features, affine_transformed)
 
@@ -98,4 +98,4 @@ def test_sfa_parameter_computation_rank_deficit_nonzero_fill(dimension, rank_def
     sfa = SFA(fill_mode="noise")
     slow_features = sfa.fit_transform(current_data)
     with pytest.raises(RuntimeError):
-      W, b = sfa.affine_parameters_()
+      W, b = sfa.affine_parameters()

@@ -433,12 +433,14 @@ class SFA(TransformerMixin, BaseEstimator):
         except AttributeError:
             return False
 
-    def affine_parameters_(self):
+    def affine_parameters(self):
         """
-        This function provides the parameters of a trained linear SFA model.  
-        Only works if the standard fit method has been used (no partial_fit) and trivial dimensions are either not filled or only filled in 'fill_mode' == 'zero'.
-        Returns the parameters W, b so that the "np.dot(data, W.T) + b" should be equivalent to calling the 'transform' method.
+        This function provides the parameters of a trained linear SFA model.
+        Only works if the standard 'fit' method has been used (no 'partial_fit') and trivial dimensions are either not filled or only filled in 'fill_mode' == 'zero'.
+        Returns the parameters W, b so that the "np.dot(data, W.T) + b" is equivalent to calling the 'transform' method.
         """
+        if not self.is_fitted:
+            raise AttributeError("Transformer has to be fitted to data before extracting parameters")
         out_dim = self.pca_diff_.components_.shape[0]
         n_missing_components = max(self.n_components_ - out_dim, 0)
         print(n_missing_components)
