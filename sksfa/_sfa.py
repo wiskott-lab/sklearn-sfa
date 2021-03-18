@@ -433,14 +433,26 @@ class SFA(TransformerMixin, BaseEstimator):
         except AttributeError:
             return False
 
-    def _compute_parameters(self):
-        """ Collapse the parameters of the two linear PCA reductions into
-        one set of mean and components for easier model inspection.
-        TODO:
-            make this deal with trivial components.
+    def affine_parameters_(self):
         """
-        W_whiten = self.pca_whiten_.components_
-        W_diff = self.pca_diff_.components_
-        #self.mean_ = self.pca_whiten_.mean_
-        self.components_ = np.dot(np.dot(W_diff, np.diag(1/np.sqrt(self.pca_whiten_.explained_variance_))), W_whiten)[-self.n_components_:][::-1]
+        This function provides the parameters of a trained linear SFA model.  
+        Only works if the standard fit method has been used (no partial_fit) and trivial dimensions are either not filled or only filled in 'fill_mode' == 'zero'.
+        Returns the parameters W, b so that the "np.dot(data, W.T) + b" should be equivalent to calling the 'transform' method.
+        """
+        out_dim = self.pca_diff_.components_.shape[0]
+        n_missing_components = max(self.n_components_ - out_dim, 0)
+        print(n_missing_components)
+        if n_missing_components > 0 and self.fill_mode not in (None, "zero"):
+            raise RuntimeError("Affine parameters cannot be extracted: missing output dimensions are filled with something else then a 0-signal. Please set 'fill_mode' to 'zero' to avoid this or make sure that your input data has high enough rank.")
+        W_whiten = (self.pca_whiten_.components_.T / np.sqrt(self.pca_whiten_.explained_variance_)).T[self.nontrivial_indices_]
+        b_whiten = np.dot(-self.pca_whiten_.mean_, W_whiten.T)
+        W_diff = self.pca_diff_.components_[::-1][:self.n_components_]
+        b_diff = np.dot(- self.pca_diff_.mean_, W_diff.T)[:self.n_components_]
+        W_transposed = np.dot(W_whiten.T, W_diff.T)
+        b = np.dot(b_whiten, W_diff.T) + b_diff
+        if n_missing_components > 0 and self.fill_mode == "zero":
+            W_transposed = np.hstack([W_transposed, np.zeros((W_transposed.shape[0], n_missing_components))])
+            b = np.hstack([b, np.zeros((n_missing_components,))])
+        return W_transposed.T, b
+        
 
