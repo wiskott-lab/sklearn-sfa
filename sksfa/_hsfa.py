@@ -150,6 +150,7 @@ class HSFA:
             expansion = PolynomialFeatures(poly_degree)
             expansion.partial = expansion.fit
             self.sequence.append(expansion)
+        self.sequence.append(AdditiveNoise(self.noise_std))
         post_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
         self.sequence.append(post_expansion_sfa)
         reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
@@ -183,7 +184,7 @@ class HSFA:
             self.sequence.append(reconstructor)
         self.sequence.append(Flatten())
         if self.final_degree > 1:
-            pre_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
+            pre_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
             self.sequence.append(pre_expansion_sfa)
             expansion = PolynomialFeatures(self.final_degree)
             expansion.partial = expansion.fit
