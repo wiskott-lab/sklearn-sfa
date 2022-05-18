@@ -49,7 +49,7 @@ class HSFA:
     and linear SFA estimators for intermediate pre-expansion dimensionality reduction.
     This can deal with high-dimensional image time-series significantly better than
     standard (non-linear) SFA by using receptive fields to slice the images in a way
-    comparable convolutional layers in neural networks.
+    comparable to convolutional layers in neural networks.
 
     In each layer, the image representation is first sliced into receptive fields that
     are defined by field-dimensions and corresponding strides. The field inputs are then
@@ -86,8 +86,9 @@ class HSFA:
         In general, this has a slight regularizing effect, but should not be chosen too high.
         If you run into repeated problems, consider changing your network architecture and/or
         increase the size of your dataset.
-    verbose : bool, default=False
-        This switch decides if there will be some additional info printed during training.
+    verbose : int, default=0
+        Whether to print additional information. 0 means no output, 1 means output during training,
+        2 means output during training and also during transformation
 
     Attributes
     ----------
@@ -154,7 +155,7 @@ class HSFA:
         post_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
         self.sequence.append(post_expansion_sfa)
         reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
-        if self.verbose:
+        if self.verbose > 0:
             print(slicer.reconstruction_shape)
         self.layer_outputs.append(slicer.reconstruction_shape)
         self.sequence.append(reconstructor)
@@ -166,7 +167,7 @@ class HSFA:
                 slicer = ReceptiveSlicer(input_shape=slicer.reconstruction_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
             except AssertionError:
                 raise ValueError(f"Layer {2 + build_idx}: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({slicer.reconstruction_shape[0]}, {slicer.reconstruction_shape[1]})")
-            if self.verbose:
+            if self.verbose > 0:
                 print(slicer.reconstruction_shape)
             self.layer_outputs.append(slicer.reconstruction_shape)
             self.sequence.append(slicer)
@@ -191,7 +192,7 @@ class HSFA:
             self.sequence.append(expansion)
         self.sequence.append(AdditiveNoise(self.noise_std))
         post_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
-        if self.verbose:
+        if self.verbose > 0:
             print((self.n_components,))
         self.sequence.append(post_expansion_sfa)
         self.sequence.append(Clipper(-4, 4))
@@ -204,11 +205,11 @@ class HSFA:
         accumulating_indices = [idx for idx, member in enumerate(self.sequence) if type(member) == SFA]
         accumulating_indices += [len(self.sequence)]
         last_idx = -1
-        if self.verbose:
+        if self.verbose > 0:
             try:
                 from tqdm import tqdm
             except ImportError:
-                raise ImportError("If 'verbose' is used, tqdm package needs to be installed")
+                raise ImportError("For verbose output, the tqdm package needs to be installed")
             iterator = tqdm(accumulating_indices)
         else:
             iterator = accumulating_indices
@@ -233,11 +234,11 @@ class HSFA:
         n_batches = int(np.ceil(n_samples / batch_size))
         result = None
         sequence = self.sequence if seq_end is None else self.sequence[:seq_end]
-        if self.verbose:
+        if self.verbose == 2:
             try:
                 from tqdm import tqdm
             except ImportError:
-                raise ImportError("If 'verbose' is used, tqdm package needs to be installed")
+                raise ImportError("For verbose output, the tqdm package needs to be installed")
             iterator = tqdm(range(n_batches))
         else:
             iterator = range(n_batches)
