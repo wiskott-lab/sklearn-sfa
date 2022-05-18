@@ -9,7 +9,7 @@ sklearn-sfa - An implementation of Slow Feature Analysis compatible with scikit-
 
 .. _MDP: https://mdp-toolkit.github.io/
 
-.. _PyPi https://pypi.org/project/sklearn-sfa/
+.. _PyPi: https://pypi.org/project/sklearn-sfa/
 
 **sklearn-sfa** or **sksfa** is an implementation of Slow Feature Analysis for scikit-learn_.
 
