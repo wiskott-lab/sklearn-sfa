@@ -9,6 +9,8 @@ sklearn-sfa - An implementation of Slow Feature Analysis compatible with scikit-
 
 .. _MDP: https://mdp-toolkit.github.io/
 
+.. _PyPi https://pypi.org/project/sklearn-sfa/
+
 **sklearn-sfa** or **sksfa** is an implementation of Slow Feature Analysis for scikit-learn_.
 
 It is meant as a standalone transformer for dimensionality reduction or as a building block
@@ -29,12 +31,18 @@ which provides stable SFA implementations that have stood the test of time.
 Installation 
 ------------
 
-The package can be installed via *pip*:
+The latest official version of the package can be installed from PyPi_ via *pip*:
 
 .. code-block:: bash
 
   pip install --user sklearn-sfa
   
+To use the latest code, the package can also be cloned directly from GitHub and then be installed via:
+
+.. code-block:: bash
+
+  cd sklearn-sfa
+  pip install -e .
 
 Basic usage
 -----------
