@@ -154,11 +154,12 @@ class HSFA:
         self.sequence.append(AdditiveNoise(self.noise_std))
         post_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
         self.sequence.append(post_expansion_sfa)
+        self.sequence.append(Clipper(-4, 4))
         reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
+        self.sequence.append(reconstructor)
+        self.layer_outputs.append(slicer.reconstruction_shape)
         if self.verbose > 0:
             print("WxH output layer 1: " + str(slicer.reconstruction_shape))
-        self.layer_outputs.append(slicer.reconstruction_shape)
-        self.sequence.append(reconstructor)
         for build_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations[1:]):
             if (field_w == field_h == -1):
                 field_w = slicer.reconstruction_shape[0]
@@ -192,10 +193,10 @@ class HSFA:
             self.sequence.append(expansion)
         self.sequence.append(AdditiveNoise(self.noise_std))
         post_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
-        if self.verbose > 0:
-            print("Shape of final output: " + str((self.n_components,)))
         self.sequence.append(post_expansion_sfa)
         self.sequence.append(Clipper(-4, 4))
+        if self.verbose > 0:
+            print("Shape of final output: " + str((self.n_components,)))
 
     def fit(self, X):
         X = np.copy(X)
@@ -209,6 +210,7 @@ class HSFA:
             transform_only = self.sequence[:last_idx+1]
             partial_sequence = self.sequence[last_idx+1:idx]
             
+            # This whole block is only for verbose printout:
             if self.verbose > 0:
                 if idx < len(self.sequence):
                     receptive_rebuilder_positions = [type(e) == ReceptiveRebuilder for e in self.sequence[:idx]]
