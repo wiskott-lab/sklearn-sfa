@@ -204,22 +204,20 @@ class HSFA:
         batch_size = self.internal_batch_size
         n_batches = int(np.ceil(n_samples / batch_size))
         accumulating_indices = [idx for idx, member in enumerate(self.sequence) if type(member) == SFA]
-        accumulating_indices += [len(self.sequence)]
         last_idx = -1
         for i, idx in enumerate(accumulating_indices):
+            # Already trained part of sequence:
             transform_only = self.sequence[:last_idx+1]
-            partial_sequence = self.sequence[last_idx+1:idx]
+            # Part of sequence to train:
+            partial_sequence = self.sequence[last_idx+1:idx+1]
             
             # This whole block is only for verbose printout:
             if self.verbose > 0:
-                if idx < len(self.sequence):
-                    receptive_rebuilder_positions = [type(e) == ReceptiveRebuilder for e in self.sequence[:idx]]
-                    current_layer = 1 + sum(receptive_rebuilder_positions) # count number of receptive rebuilders up to now
-                    id_last_receptive_rebuilder = max(np.where(receptive_rebuilder_positions)[0]) if any(receptive_rebuilder_positions) else 0
-                    num_sfa = 1 + sum([type(e) == SFA for e in self.sequence[id_last_receptive_rebuilder:idx]]) # count number of SFAs since last receptive rebuilder
-                    print(f"Training layer {current_layer}, SFA {num_sfa} ({i+1} of {len(accumulating_indices)-1} total)")
-                else:
-                    print("Last training iteration")
+                receptive_rebuilder_positions = [type(e) == ReceptiveRebuilder for e in self.sequence[:idx]]
+                current_layer = 1 + sum(receptive_rebuilder_positions) # count number of receptive rebuilders up to now
+                id_last_receptive_rebuilder = max(np.where(receptive_rebuilder_positions)[0]) if any(receptive_rebuilder_positions) else 0
+                num_sfa = 1 + sum([type(e) == SFA for e in self.sequence[id_last_receptive_rebuilder:idx]]) # count number of SFAs since last receptive rebuilder
+                print(f"Training layer {current_layer}, SFA {num_sfa} ({i+1} of {len(accumulating_indices)} total)")
                 try:
                     from tqdm import tqdm
                 except ImportError:
@@ -234,9 +232,8 @@ class HSFA:
                     current_batch = member.transform(current_batch)
                 for member in partial_sequence:
                     member.partial(current_batch)
-                    current_batch = member.transform(current_batch)
-                if idx < len(self.sequence):
-                    self.sequence[idx].partial(current_batch)
+                    if type(member) is not SFA:
+                        current_batch = member.transform(current_batch)
             last_idx = idx
         return self
 
