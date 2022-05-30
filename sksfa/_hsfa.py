@@ -138,39 +138,16 @@ class HSFA:
         self.initialize_layers()
 
     def initialize_layers(self):
-        # First layer does not need reconstructor
-        field_w, field_h, stride_w, stride_h, n_components, poly_degree = self.layer_configurations[0]
-        try:
-            slicer = ReceptiveSlicer(input_shape=self.input_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
-        except AssertionError:
-            raise ValueError(f"Layer 1: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({self.input_shape[0]}, {self.input_shape[1]})")
-        self.sequence.append(slicer)
-        if poly_degree > 1:
-            sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
-            self.sequence.append(sfa)
-            expansion = PolynomialFeatures(poly_degree)
-            expansion.partial = expansion.fit
-            self.sequence.append(expansion)
-        self.sequence.append(AdditiveNoise(self.noise_std))
-        post_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
-        self.sequence.append(post_expansion_sfa)
-        self.sequence.append(Clipper(-4, 4))
-        reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
-        self.sequence.append(reconstructor)
-        self.layer_outputs.append(slicer.reconstruction_shape)
-        if self.verbose > 0:
-            print("WxH output layer 1: " + str(slicer.reconstruction_shape))
-        for build_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations[1:]):
-            if (field_w == field_h == -1):
+        # Stack all layers except the last
+        for build_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations):
+            if build_idx > 0 and (field_w == field_h == -1):
                 field_w = slicer.reconstruction_shape[0]
                 field_h = slicer.reconstruction_shape[1]
             try:
-                slicer = ReceptiveSlicer(input_shape=slicer.reconstruction_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
+                input_shape = self.input_shape if build_idx == 0 else slicer.reconstruction_shape
+                slicer = ReceptiveSlicer(input_shape=input_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
             except AssertionError:
-                raise ValueError(f"Layer {2 + build_idx}: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({slicer.reconstruction_shape[0]}, {slicer.reconstruction_shape[1]})")
-            if self.verbose > 0:
-                print(f"WxH output layer {2 + build_idx}: " + str(slicer.reconstruction_shape))
-            self.layer_outputs.append(slicer.reconstruction_shape)
+                raise ValueError(f"Layer {build_idx + 1}: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({input_shape[0]}, {input_shape[1]})")
             self.sequence.append(slicer)
             if poly_degree > 1:
                 pre_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
@@ -184,7 +161,12 @@ class HSFA:
             self.sequence.append(Clipper(-4, 4))
             reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
             self.sequence.append(reconstructor)
+            self.layer_outputs.append(slicer.reconstruction_shape)
+            if self.verbose > 0:
+                print(f"WxH output layer {build_idx + 1}: " + str(slicer.reconstruction_shape))
+        # Flatten
         self.sequence.append(Flatten())
+        # Last layer
         if self.final_degree > 1:
             pre_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
             self.sequence.append(pre_expansion_sfa)
