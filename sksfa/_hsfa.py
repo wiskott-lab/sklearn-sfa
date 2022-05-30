@@ -247,9 +247,7 @@ class HSFA:
     def summary(self):
         """ Prints a summary of the network architecture.
         """
-        print()
-        print(" = = = = NETWORK ARCHITECTURE = = = = ")
-        print()
+        print("\n = = = = NETWORK ARCHITECTURE = = = = \n")
         print("Input Layer:")
         print(f"\tinput shape: \t\t{self.input_shape}")
         for layer_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations):
@@ -260,8 +258,6 @@ class HSFA:
         print(f"Final Layer:")
         print("\tfully connected")
         print(f"\texpansion degree \t{self.final_degree}")
-        print(f"\toutput shape \t\t({self.n_components},)")
-        print()
-        print()
+        print(f"\toutput shape \t\t({self.n_components},)\n\n")
 
 
