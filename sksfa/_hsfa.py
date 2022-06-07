@@ -49,7 +49,7 @@ class HSFA:
     and linear SFA estimators for intermediate pre-expansion dimensionality reduction.
     This can deal with high-dimensional image time-series significantly better than
     standard (non-linear) SFA by using receptive fields to slice the images in a way
-    comparable convolutional layers in neural networks.
+    comparable to convolutional layers in neural networks.
 
     In each layer, the image representation is first sliced into receptive fields that
     are defined by field-dimensions and corresponding strides. The field inputs are then
@@ -86,8 +86,9 @@ class HSFA:
         In general, this has a slight regularizing effect, but should not be chosen too high.
         If you run into repeated problems, consider changing your network architecture and/or
         increase the size of your dataset.
-    verbose : bool, default=False
-        This switch decides if there will be some additional info printed during training.
+    verbose : int, default=0
+        Whether to print additional information. 0 means no output, 1 means output during training,
+        2 means output during training and also during transformation
 
     Attributes
     ----------
@@ -137,38 +138,16 @@ class HSFA:
         self.initialize_layers()
 
     def initialize_layers(self):
-        # First layer does not need reconstructor
-        field_w, field_h, stride_w, stride_h, n_components, poly_degree = self.layer_configurations[0]
-        try:
-            slicer = ReceptiveSlicer(input_shape=self.input_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
-        except AssertionError:
-            raise ValueError(f"Layer 1: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({self.input_shape[0]}, {self.input_shape[1]})")
-        self.sequence.append(slicer)
-        if poly_degree > 1:
-            sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
-            self.sequence.append(sfa)
-            expansion = PolynomialFeatures(poly_degree)
-            expansion.partial = expansion.fit
-            self.sequence.append(expansion)
-        self.sequence.append(AdditiveNoise(self.noise_std))
-        post_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
-        self.sequence.append(post_expansion_sfa)
-        reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
-        if self.verbose:
-            print(slicer.reconstruction_shape)
-        self.layer_outputs.append(slicer.reconstruction_shape)
-        self.sequence.append(reconstructor)
-        for build_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations[1:]):
-            if (field_w == field_h == -1):
+        # Stack all layers except the last
+        for build_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations):
+            if build_idx > 0 and (field_w == field_h == -1):
                 field_w = slicer.reconstruction_shape[0]
                 field_h = slicer.reconstruction_shape[1]
             try:
-                slicer = ReceptiveSlicer(input_shape=slicer.reconstruction_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
+                input_shape = self.input_shape if build_idx == 0 else slicer.reconstruction_shape
+                slicer = ReceptiveSlicer(input_shape=input_shape, field_size=(field_w, field_h), strides=(stride_w, stride_h))
             except AssertionError:
-                raise ValueError(f"Layer {2 + build_idx}: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({slicer.reconstruction_shape[0]}, {slicer.reconstruction_shape[1]})")
-            if self.verbose:
-                print(slicer.reconstruction_shape)
-            self.layer_outputs.append(slicer.reconstruction_shape)
+                raise ValueError(f"Layer {build_idx + 1}: Field ({field_w}, {field_h}) with stride ({stride_w}, {stride_h}) does not fit data dimension ({input_shape[0]}, {input_shape[1]})")
             self.sequence.append(slicer)
             if poly_degree > 1:
                 pre_expansion_sfa = SFA(n_components, batch_size=self.internal_batch_size, fill_mode=None)
@@ -182,7 +161,12 @@ class HSFA:
             self.sequence.append(Clipper(-4, 4))
             reconstructor = ReceptiveRebuilder((slicer.reconstruction_shape))
             self.sequence.append(reconstructor)
+            self.layer_outputs.append(slicer.reconstruction_shape)
+            if self.verbose > 0:
+                print(f"WxH output layer {build_idx + 1}: " + str(slicer.reconstruction_shape))
+        # Flatten
         self.sequence.append(Flatten())
+        # Last layer
         if self.final_degree > 1:
             pre_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
             self.sequence.append(pre_expansion_sfa)
@@ -191,10 +175,10 @@ class HSFA:
             self.sequence.append(expansion)
         self.sequence.append(AdditiveNoise(self.noise_std))
         post_expansion_sfa = SFA(self.n_components, batch_size=self.internal_batch_size, fill_mode=None)
-        if self.verbose:
-            print((self.n_components,))
         self.sequence.append(post_expansion_sfa)
         self.sequence.append(Clipper(-4, 4))
+        if self.verbose > 0:
+            print("Shape of final output: " + str((self.n_components,)))
 
     def fit(self, X):
         X = np.copy(X)
@@ -202,28 +186,36 @@ class HSFA:
         batch_size = self.internal_batch_size
         n_batches = int(np.ceil(n_samples / batch_size))
         accumulating_indices = [idx for idx, member in enumerate(self.sequence) if type(member) == SFA]
-        accumulating_indices += [len(self.sequence)]
         last_idx = -1
-        if self.verbose:
-            try:
-                from tqdm import tqdm
-            except ImportError:
-                raise ImportError("If 'verbose' is used, tqdm package needs to be installed")
-            iterator = tqdm(accumulating_indices)
-        else:
-            iterator = accumulating_indices
-        for idx in iterator:
+        for i, idx in enumerate(accumulating_indices):
+            # Already trained part of sequence:
             transform_only = self.sequence[:last_idx+1]
-            partial_sequence = self.sequence[last_idx+1:idx]
-            for batch_idx in range(n_batches):
+            # Part of sequence to train:
+            partial_sequence = self.sequence[last_idx+1:idx+1]
+            
+            # This whole block is only for verbose printout:
+            if self.verbose > 0:
+                receptive_rebuilder_positions = [type(e) == ReceptiveRebuilder for e in self.sequence[:idx]]
+                current_layer = 1 + sum(receptive_rebuilder_positions) # count number of receptive rebuilders up to now
+                id_last_receptive_rebuilder = max(np.where(receptive_rebuilder_positions)[0]) if any(receptive_rebuilder_positions) else 0
+                num_sfa = 1 + sum([type(e) == SFA for e in self.sequence[id_last_receptive_rebuilder:idx]]) # count number of SFAs since last receptive rebuilder
+                print(f"Training layer {current_layer}, SFA {num_sfa} ({i+1} of {len(accumulating_indices)} total)")
+                try:
+                    from tqdm import tqdm
+                except ImportError:
+                    raise ImportError("For verbose output, the tqdm package needs to be installed")
+                batch_iterator = tqdm(range(n_batches), desc="Processed batches", unit="batches")
+            else:
+                batch_iterator = range(n_batches)
+            
+            for batch_idx in batch_iterator:
                 current_batch = X[batch_idx * batch_size: (batch_idx + 1) * batch_size]
                 for member in transform_only:
                     current_batch = member.transform(current_batch)
                 for member in partial_sequence:
                     member.partial(current_batch)
-                    current_batch = member.transform(current_batch)
-                if idx < len(self.sequence):
-                    self.sequence[idx].partial(current_batch)
+                    if type(member) is not SFA:
+                        current_batch = member.transform(current_batch)
             last_idx = idx
         return self
 
@@ -233,12 +225,12 @@ class HSFA:
         n_batches = int(np.ceil(n_samples / batch_size))
         result = None
         sequence = self.sequence if seq_end is None else self.sequence[:seq_end]
-        if self.verbose:
+        if self.verbose == 2:
             try:
                 from tqdm import tqdm
             except ImportError:
-                raise ImportError("If 'verbose' is used, tqdm package needs to be installed")
-            iterator = tqdm(range(n_batches))
+                raise ImportError("For verbose output, the tqdm package needs to be installed")
+            iterator = tqdm(range(n_batches), desc="Transformed batches", unit="batches")
         else:
             iterator = range(n_batches)
         for batch_idx in iterator:
@@ -255,9 +247,7 @@ class HSFA:
     def summary(self):
         """ Prints a summary of the network architecture.
         """
-        print()
-        print(" = = = = NETWORK ARCHITECTURE = = = = ")
-        print()
+        print("\n = = = = NETWORK ARCHITECTURE = = = = \n")
         print("Input Layer:")
         print(f"\tinput shape: \t\t{self.input_shape}")
         for layer_idx, (field_w, field_h, stride_w, stride_h, n_components, poly_degree) in enumerate(self.layer_configurations):
@@ -268,8 +258,6 @@ class HSFA:
         print(f"Final Layer:")
         print("\tfully connected")
         print(f"\texpansion degree \t{self.final_degree}")
-        print(f"\toutput shape \t\t({self.n_components},)")
-        print()
-        print()
+        print(f"\toutput shape \t\t({self.n_components},)\n\n")
 
 
