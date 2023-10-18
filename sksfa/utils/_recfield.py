@@ -270,7 +270,8 @@ class ReceptiveSlicer(TransformerMixin, BaseEstimator):
             Number of slices, given the provided parameters.
         """
         n_valid_steps = (dimension - field_size)/field_stride + 1
-        assert(int(n_valid_steps) == n_valid_steps)
+        if int(n_valid_steps) != n_valid_steps:
+            raise AssertionError(f"(dimension-field_size)/field_stride+1, here ({dimension}-{field_size})/{field_stride}+1, is not an integer!")
         return int(n_valid_steps)
 
     def _sliceSingleSample(self, sample, field_rows, field_cols, row_stride, col_stride):
