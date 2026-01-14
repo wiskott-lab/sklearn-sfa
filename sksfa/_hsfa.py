@@ -179,20 +179,23 @@ class HSFA:
         self.sequence.append(Clipper(-4, 4))
         if self.verbose > 0:
             print("Shape of final output: " + str((self.n_components,)))
-
-    def fit(self, X):
+    
+    def fit(self, X, weights=None, store_transforms_from=2):
         X = np.copy(X)
         n_samples = X.shape[0]
         batch_size = self.internal_batch_size
         n_batches = int(np.ceil(n_samples / batch_size))
         accumulating_indices = [idx for idx, member in enumerate(self.sequence) if type(member) == SFA]
         last_idx = -1
+        transformed_batches = [None]*n_batches
+        start_storing_transforms_id = store_transforms_from
+
         for i, idx in enumerate(accumulating_indices):
             # Already trained part of sequence:
             transform_only = self.sequence[:last_idx+1]
             # Part of sequence to train:
             partial_sequence = self.sequence[last_idx+1:idx+1]
-            
+
             # This whole block is only for verbose printout:
             if self.verbose > 0:
                 receptive_rebuilder_positions = [type(e) == ReceptiveRebuilder for e in self.sequence[:idx]]
@@ -200,22 +203,58 @@ class HSFA:
                 id_last_receptive_rebuilder = max(np.where(receptive_rebuilder_positions)[0]) if any(receptive_rebuilder_positions) else 0
                 num_sfa = 1 + sum([type(e) == SFA for e in self.sequence[id_last_receptive_rebuilder:idx]]) # count number of SFAs since last receptive rebuilder
                 print(f"Training layer {current_layer}, SFA {num_sfa} ({i+1} of {len(accumulating_indices)} total)")
+                if (weights is not None) and (i+1 >= len(accumulating_indices)-1):
+                    print(f"Using weights {list(np.round(weights.reshape(-1)[:10],3))}...")
+                if i == start_storing_transforms_id:
+                    print("Switching from batch-wise recalculations (minimizing memory usage) to storing batches (optimizing speed)...")
                 try:
                     from tqdm import tqdm
                 except ImportError:
                     raise ImportError("For verbose output, the tqdm package needs to be installed")
-                batch_iterator = tqdm(range(n_batches), desc="Processed batches", unit="batches")
-            else:
-                batch_iterator = range(n_batches)
+                if i <= start_storing_transforms_id:
+                    batch_iterator = tqdm(range(n_batches), desc="Processed batches", unit="batches")
             
-            for batch_idx in batch_iterator:
-                current_batch = X[batch_idx * batch_size: (batch_idx + 1) * batch_size]
-                for member in transform_only:
-                    current_batch = member.transform(current_batch)
-                for member in partial_sequence:
-                    member.partial(current_batch)
-                    if type(member) is not SFA:
+            if i < start_storing_transforms_id:
+            # Transform every batch individually again and again, don't store them
+                for batch_idx in batch_iterator:
+                    current_batch = X[batch_idx * batch_size: (batch_idx + 1) * batch_size]
+                    for member in transform_only:
                         current_batch = member.transform(current_batch)
+                    for member in partial_sequence:
+                        if type(member) is SFA:
+                            if i+1 >= len(accumulating_indices)-1: # Use weights only for the last two SFAs
+                                member.partial(current_batch, weights)
+                            else:
+                                member.partial(current_batch)
+                        else:
+                            member.partial(current_batch)
+                            current_batch = member.transform(current_batch)
+            
+            if i == start_storing_transforms_id:
+            # Calculate transformed batches up to now (one by one) and store all of them
+                batch_iterator.set_description("Processing batches up to now")
+                for batch_idx in batch_iterator:
+                    current_batch = X[batch_idx * batch_size: (batch_idx + 1) * batch_size]
+                    for member in transform_only:
+                        current_batch = member.transform(current_batch)
+                    transformed_batches[batch_idx] = current_batch
+
+            if i >= start_storing_transforms_id:
+            # Operate with existing batches
+                for member in partial_sequence:
+                    if self.verbose > 0 and type(member) is SFA:
+                        iterator_train = tqdm(range(n_batches), desc=f"Training SFA", unit="batches")
+                    else:
+                        iterator_train=range(n_batches)
+                    for batch_idx in iterator_train: # Train on all batches. If member is not trainable partial() does nothing
+                        current_batch = transformed_batches[batch_idx]
+                        if (type(member) is SFA) and (i+1 >= len(accumulating_indices)-1): # Use weights only for the last two SFAs
+                            member.partial(current_batch, weights)
+                        else:
+                            member.partial(current_batch)
+                    for batch_idx in range(n_batches): # Transform once to wrap up training and prepare for next sequence
+                        transformed_batches[batch_idx] = member.transform(transformed_batches[batch_idx])
+
             last_idx = idx
         return self
 

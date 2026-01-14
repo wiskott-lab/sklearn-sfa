@@ -200,7 +200,7 @@ class SFA(TransformerMixin, BaseEstimator):
         self.is_fitted_ = True
         return self
 
-    def partial(self, X, y=None):
+    def partial(self, X, y=None, weights=None):
         """Fit the model on a part of your dataset. This is used mainly for
         processing in hierarchical SFA.
         This is not the same as 'fit' using a batch-size.
@@ -211,52 +211,62 @@ class SFA(TransformerMixin, BaseEstimator):
             The training input samples. If batch_size was set on init,
             this is assumed to be composed of concatenated time-series
             of batch_size length.
+        weights: For weighted SFA
         """
+        if weights is None:
+            weights = np.ones((len(X), 1))
+        else:
+            weights = weights[:,None]
         n_samples = X.shape[0]
         assert(not self.is_fitted)
         if not self.is_partially_fitted:
-            self._diff_sum = None
             self._n_partial_samples = 0
             self._n_partial_diff_samples = 0
             self._partial_eigenvectors = None
             self._partial_eigenvalues = None
         if self.batch_size is None:
-            self._accumulate(X)
-            self.last_partial_sample = X[-1]
+            self._accumulate(X, weights)
         else:
             n_batches = math.ceil(n_samples/self.batch_size)
             for batch_idx in range(n_batches):
                 current_batch = X[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
-                self._accumulate(current_batch)
-                self.last_partial_sample = current_batch[-1]
+                batch_weights = weights[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
+                self._accumulate(current_batch, batch_weights)
         self.is_partially_fitted_ = True
         return self
 
-    def _accumulate(self, X):
+    def _accumulate(self, X, weights):
         """ This function is meant for mini-batch training and collects covariance
         and mean information of the provided mini-batches.
         Training is finished as soon as transform is called or if the model has been
         fitted by full-batch training.
         """
-        diff_X = X[1:] - X[:-1]
+        # diff_weights = weights[:-1]+np.diff(weights, axis=0)/2 # averages weights of two points involved in diff
+        diff_weights = np.sqrt(weights[1:]*weights[:-1]) # geometric mean of weights of two points involved in diff
+        diff_X = np.diff(X, axis=0)
+        weighted_diff_X = diff_X * diff_weights
+        weighted_X = X * weights
         if self._n_partial_samples == 0:
-            self.sample_sum = X.sum(axis=0)
-            self.outer_sum = np.dot(X.T, X)
-            self._n_partial_samples = X.shape[0]
+            self.sample_sum = weighted_X.sum(axis=0)
+            self.weight_sum = np.sum(weights)
+            self.outer_sum = np.dot(weighted_X.T, X)
+            self._n_partial_samples = weighted_X.shape[0]
         else:
-            self.sample_sum += X.sum(axis=0)
-            self.outer_sum += np.dot(X.T, X)
-            self._n_partial_samples += X.shape[0]
+            self.sample_sum += weighted_X.sum(axis=0)
+            self.weight_sum += np.sum(weights)
+            self.outer_sum += np.dot(weighted_X.T, X)
+            self._n_partial_samples += weighted_X.shape[0]
 
         if self._n_partial_diff_samples == 0:
-            self.sample_diff_sum = diff_X.sum(axis=0)
-            self.outer_diff_sum = np.dot(diff_X.T, diff_X)
-            self._n_partial_diff_samples = diff_X.shape[0]
+            self.sample_diff_sum = weighted_diff_X.sum(axis=0)
+            self.diff_weight_sum = np.sum(diff_weights)
+            self.outer_diff_sum = np.dot(weighted_diff_X.T, diff_X)
+            self._n_partial_diff_samples = weighted_diff_X.shape[0]
         else:
-            last_partial_diff = X[0] - self.last_partial_sample
-            self.sample_diff_sum += diff_X.sum(axis=0)# + last_partial_diff
-            self.outer_diff_sum += np.dot(diff_X.T, diff_X)# + np.dot(last_partial_diff[:, None], last_partial_diff[None, :])
-            self._n_partial_diff_samples += diff_X.shape[0]# + 1
+            self.sample_diff_sum += weighted_diff_X.sum(axis=0)
+            self.diff_weight_sum += np.sum(diff_weights)
+            self.outer_diff_sum += np.dot(weighted_diff_X.T, diff_X)
+            self._n_partial_diff_samples += weighted_diff_X.shape[0]
         return self
 
     def _fit(self, X):
@@ -346,8 +356,9 @@ class SFA(TransformerMixin, BaseEstimator):
         Instead, a generalized eigenvalue problem from accumulated covariance
         matrices is solved.
         """
-        C = (self.outer_sum  - np.outer(self.sample_sum, self.sample_sum)/(self._n_partial_samples)) / (self._n_partial_samples - 1)
-        Cdot = self.outer_diff_sum/(self._n_partial_diff_samples - 1)
+        # Use this for weighted cov mat: https://stats.stackexchange.com/a/61298
+        C = (self.outer_sum  - np.outer(self.sample_sum, self.sample_sum)/(self.weight_sum)) / (self.weight_sum - 1)
+        Cdot = (self.outer_diff_sum   - np.outer(self.sample_diff_sum, self.sample_diff_sum)/(self.diff_weight_sum))/(self.diff_weight_sum - 1)
         self._partial_eigenvalues, self._partial_eigenvectors = sp.linalg.eigh(Cdot, C)
 
     def _compute_delta_values(self):
